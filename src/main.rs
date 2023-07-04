@@ -1,46 +1,76 @@
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::transport::Server;
 use tonic_web::GrpcWebLayer;
 
-use proto::greeter_server::{Greeter, GreeterServer};
-use proto::{HelloReply, HelloRequest};
+use proto::data_store_server::{DataStore, DataStoreServer};
 
 pub mod proto {
-    tonic::include_proto!("helloworld");
     pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
-        tonic::include_file_descriptor_set!("helloworld_descriptor");
+        tonic::include_file_descriptor_set!("datastore_descriptor");
+    tonic::include_proto!("datastore");
 }
 
 #[derive(Default)]
-pub struct MyGreeter {}
+pub struct MongoDBDataStore {}
 
 #[tonic::async_trait]
-impl Greeter for MyGreeter {
-    async fn say_hello(
+impl DataStore for MongoDBDataStore {
+    async fn retrieve_data(
         &self,
-        request: Request<HelloRequest>,
-    ) -> Result<Response<HelloReply>, Status> {
-        println!("Got a request from {:?}", request.remote_addr());
-
-        let reply = proto::HelloReply {
-            message: format!("Hello {}!", request.into_inner().name),
-        };
-        Ok(Response::new(reply))
+        request: tonic::Request<proto::RetrievingDataRequest>,
+    ) -> std::result::Result<tonic::Response<proto::DataResponse>, tonic::Status> {
+        dbg!(request);
+        unimplemented!()
+    }
+    async fn batch_retrieve_data(
+        &self,
+        request: tonic::Request<proto::RetrievingDataRequest>,
+    ) -> std::result::Result<tonic::Response<proto::BatchDataResponse>, tonic::Status> {
+        dbg!(request);
+        unimplemented!()
+    }
+    async fn save_data(
+        &self,
+        request: tonic::Request<proto::SavingDataRequest>,
+    ) -> std::result::Result<tonic::Response<proto::DataResponse>, tonic::Status> {
+        dbg!(request);
+        unimplemented!()
+    }
+    async fn batch_save_data(
+        &self,
+        request: tonic::Request<proto::SavingDataRequest>,
+    ) -> std::result::Result<tonic::Response<proto::BatchDataResponse>, tonic::Status> {
+        dbg!(request);
+        unimplemented!()
+    }
+    async fn get_current_root(
+        &self,
+        request: tonic::Request<proto::GettingRootRequest>,
+    ) -> std::result::Result<tonic::Response<proto::DataRoot>, tonic::Status> {
+        dbg!(request);
+        unimplemented!()
+    }
+    async fn get_all_cookies(
+        &self,
+        request: tonic::Request<proto::GettingCookiesRequest>,
+    ) -> std::result::Result<tonic::Response<proto::CookiesResponse>, tonic::Status> {
+        dbg!(request);
+        unimplemented!()
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::1]:50051".parse().unwrap();
+    let addr = "127.0.0.1:50051".parse().unwrap();
 
     let reflection_service = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(proto::FILE_DESCRIPTOR_SET)
         .build()
         .unwrap();
 
-    let greeter = MyGreeter::default();
-    let greeter = GreeterServer::new(greeter);
+    let greeter = MongoDBDataStore::default();
+    let greeter = DataStoreServer::new(greeter);
 
-    println!("GreeterServer listening on {}", addr);
+    println!("Server listening on {}", addr);
 
     Server::builder()
         // GrpcWeb is over http1 so we must enable it.

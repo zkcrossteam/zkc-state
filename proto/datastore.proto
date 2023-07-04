@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package datastore;
+
+// The state root, a compact representation (usually a hash) of all the data in
+// current data store. Different contents in the data store are computationally
+// guaranteed to have different state roots. Applications may view this as the
+// version number of their data.
+message DataRoot { bytes value = 1; }
+
+// An opaque data structure used to indicate which slot in the data store is
+// this data stored. Applications may view this as the key to the data they want
+// to store.
+message DataCookie { bytes value = 1; }
+
+// Any data applications want to store in the data store.
+message DataContent { bytes value = 1; }
+
+message Data {
+  DataCookie cookie = 2;
+  DataContent content = 3;
+}
+
+message DataResponse {
+  DataRoot root = 1;
+  Data data = 2;
+}
+
+message BatchDataResponse {
+  DataRoot root = 1;
+  repeated Data data = 2;
+}
+
+message RetrievingDataRequest {
+  optional DataRoot root = 1;
+  DataCookie cookie = 2;
+}
+
+message BatchRetrievingDataRequest {
+  optional DataRoot root = 1;
+  repeated DataCookie cookies = 2;
+}
+
+message SavingDataRequest {
+  optional DataRoot root = 1;
+  DataContent content = 2;
+}
+
+message BatchSavingDataRequest {
+  optional DataRoot root = 1;
+  repeated DataContent contents = 2;
+}
+
+message GettingRootRequest {}
+
+message GettingCookiesRequest { optional DataRoot root = 1; }
+
+message CookiesResponse {
+  DataRoot root = 1;
+  repeated DataCookie cookies = 2;
+}
+
+service DataStore {
+  // Retrieving the data with supplied cookie from data store. When optional
+  // root is supplied, only the data with that root will be returned. This is
+  // useful to obtain some specific version of the data.
+  rpc RetrieveData(RetrievingDataRequest) returns (DataResponse) {}
+
+  // The batch version of `RetrieveData`.
+  rpc BatchRetrieveData(RetrievingDataRequest) returns (BatchDataResponse) {}
+
+  // Saving content to the data store. When the optional root is supplied, the
+  // data store will check if the current root is the supplied root, if it is
+  // not the case the data will not be saved. This is useful when the client
+  // want to ensure some kind of data consistency.
+  rpc SaveData(SavingDataRequest) returns (DataResponse) {}
+
+  // The batch version of `BatchSaveData`.
+  rpc BatchSaveData(SavingDataRequest) returns (BatchDataResponse) {}
+
+  // Get current state root.
+  rpc GetCurrentRoot(GettingRootRequest) returns (DataRoot) {}
+
+  // Getting all the cookies of the data store. If root is supplied, then only
+  // the data in that root will be returned. Otherwise, only data with current
+  // root will be returned.
+  rpc GetAllCookies(GettingCookiesRequest) returns (CookiesResponse) {}
+}
