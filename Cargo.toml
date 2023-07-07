@@ -1,5 +1,5 @@
 [package]
-name = "zkc-da-node"
+name = "zkc_state_manager"
 version = "0.1.0"
 edition = "2021"
 
