@@ -42,13 +42,6 @@ impl DataStore for MongoDBDataStore {
         dbg!(request);
         unimplemented!()
     }
-    async fn get_current_root(
-        &self,
-        request: tonic::Request<proto::GettingRootRequest>,
-    ) -> std::result::Result<tonic::Response<proto::DataRoot>, tonic::Status> {
-        dbg!(request);
-        unimplemented!()
-    }
     async fn get_all_cookies(
         &self,
         request: tonic::Request<proto::GettingCookiesRequest>,

@@ -51,8 +51,6 @@ message BatchSavingDataRequest {
   repeated DataContent contents = 2;
 }
 
-message GettingRootRequest {}
-
 message GettingCookiesRequest { optional DataRoot root = 1; }
 
 message CookiesResponse {
@@ -78,11 +76,87 @@ service DataStore {
   // The batch version of `BatchSaveData`.
   rpc BatchSaveData(SavingDataRequest) returns (BatchDataResponse) {}
 
-  // Get current state root.
-  rpc GetCurrentRoot(GettingRootRequest) returns (DataRoot) {}
-
   // Getting all the cookies of the data store. If root is supplied, then only
   // the data in that root will be returned. Otherwise, only data with current
   // root will be returned.
   rpc GetAllCookies(GettingCookiesRequest) returns (CookiesResponse) {}
+}
+
+message Key {
+  string key = 1;
+  // An optional owner public key, used to authorize key value update.
+  // Current unused.
+  optional bytes owner = 2;
+}
+message Value { bytes value = 1; }
+
+message KVPair {
+  Key key = 1;
+  Value value = 2;
+};
+
+enum ProofType {
+  ProofUnspecified = 0; // Default enum value, should not be used
+  ProofEmpty = 1;       // No proof
+  ProofV0 = 2;
+}
+
+// A proof to validate whether some key value pair exists in the KVStore.
+message Proof {
+  ProofType proof_type = 1;
+  bytes proof = 2;
+}
+
+message KVGetRequest {
+  Key key = 1;
+  ProofType proof_type = 2;
+}
+
+message KVGetResponse {
+  DataRoot root = 1;
+  KVPair kv = 2;
+  Proof proof = 3;
+}
+
+enum SignatureType {
+  SignatureUnspecified = 0; // Default enum value, should not be used
+  SignatureEmpty = 1;       // No proofs
+  SignatureV0 = 2;
+}
+
+// A signature signed by the owner of some key to authorize the key value pair
+// update.
+message Signature {
+  SignatureType proof_type = 1;
+  bytes signature = 2;
+}
+
+message KVSetRequest {
+  KVPair kv = 1;
+  optional Signature signature = 2;
+}
+
+message KVSetResponse {
+  DataRoot root = 1;
+  KVPair kv = 2;
+  Proof proof = 3;
+};
+
+message KVProveRequest {
+  KVPair kv = 1;
+  ProofType proof_type = 2;
+}
+
+message KVProveResponse { bool is_valid = 1; }
+
+message KVGetRootRequest {}
+
+message KVGetRootReponse { bytes root = 1; }
+
+service KVStore {
+  // Get current state root.
+  rpc GetCurrentRoot(KVGetRootRequest) returns (KVGetRootReponse) {}
+  rpc Get(KVGetRequest) returns (KVGetResponse) {}
+  rpc Set(KVSetRequest) returns (KVSetResponse) {}
+  rpc Prove(KVProveRequest) returns (KVProveResponse) {}
 }
