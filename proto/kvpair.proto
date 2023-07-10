@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package kvpair;
+
+message ContractID { bytes id = 1; }
+
+message Hash { bytes hash = 1; }
+
+message LeafData { bytes data = 1; }
+
+message NodeChildren {
+  Hash left_child_hash = 5;
+  Hash right_child_hash = 6;
+}
+
+enum NodeType {
+  NodeUnspecified = 0;
+  NodeLeaf = 1;
+  NodeNonLeaf = 2;
+}
+
+message Node {
+  uint64 index = 1;
+  Hash hash = 2;
+  NodeType node_type = 3;
+  oneof things {
+    LeafData data = 4;
+    NodeChildren children = 5;
+  }
+}
+
+enum ProofType {
+  ProofUnspecified = 0; // Default enum value, equivalent to ProofEmpty
+  ProofEmpty = 1;       // No proof
+  ProofV0 = 2;
+}
+
+// A proof to validate whether some key value pair exists in the KVStore.
+message Proof {
+  ProofType proof_type = 1;
+  repeated Node nodes = 2;
+}
+
+message GetRootRequest { ContractID contract_id = 1; }
+
+message GetRootResponse {
+  ContractID contract_id = 1;
+  Hash root = 2;
+}
+
+message SetRootRequest { ContractID contract_id = 1; }
+
+message SetRootResponse {
+  ContractID contract_id = 1;
+  Hash root = 2;
+}
+
+message GetLeafRequest {
+  ContractID contract_id = 1;
+  uint64 index = 2;
+  Hash hash = 3;
+  ProofType proof_type = 4;
+}
+
+message GetLeafResponse {
+  Node node = 1;
+  optional Proof proof = 2;
+}
+
+message GetNonLeafRequest {
+  ContractID contract_id = 1;
+  uint64 index = 2;
+  Hash hash = 3;
+}
+
+message GetNonLeafResponse { Node node = 1; }
+
+message SetLeafRequest {
+  ContractID contract_id = 1;
+  uint64 index = 2;
+  Hash hash = 3;
+  LeafData leaf_data = 4;
+  ProofType proof_type = 5;
+}
+
+message SetLeafResponse {
+  Node node = 1;
+  optional Proof proof = 2;
+}
+
+message SetNonLeafRequest {
+  ContractID contract_id = 1;
+  uint64 index = 2;
+  Hash hash = 3;
+  Hash left_child_hash = 4;
+  Hash right_child_hash = 5;
+}
+
+message SetNonLeafResponse { Node node = 1; }
+
+service KVPair {
+  rpc GetRoot(GetRootRequest) returns (GetRootResponse) {}
+  rpc SetRoot(SetRootRequest) returns (SetRootResponse) {}
+
+  rpc GetLeaf(GetLeafRequest) returns (GetLeafResponse) {}
+  rpc SetLeaf(SetLeafRequest) returns (GetLeafResponse) {}
+
+  rpc GetNonLeaf(GetNonLeafRequest) returns (GetNonLeafResponse) {}
+  rpc SetNonLeaf(SetNonLeafRequest) returns (SetNonLeafResponse) {}
+}
