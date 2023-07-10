@@ -73,6 +73,32 @@ impl From<[u8; 32]> for Hash {
     }
 }
 
+#[derive(Copy, Debug, Clone, Eq, PartialEq, Default)]
+pub struct LeafData(pub [u8; 32]);
+
+// TODO: Maybe use something like protovalidate to automatically validate fields.
+impl TryFrom<&[u8]> for LeafData {
+    type Error = Error;
+
+    fn try_from(a: &[u8]) -> Result<LeafData, Self::Error> {
+        a.try_into()
+            .map_err(|_e| Error::InvalidArgument(format!("LeafData malformed (must be [u8; 32])")))
+            .map(|value| LeafData(value))
+    }
+}
+
+impl From<LeafData> for Vec<u8> {
+    fn from(value: LeafData) -> Self {
+        value.0.into()
+    }
+}
+
+impl From<[u8; 32]> for LeafData {
+    fn from(value: [u8; 32]) -> Self {
+        Self(value)
+    }
+}
+
 pub const MONGODB_URI: &str = "mongodb://localhost:27017";
 
 fn deserialize_u256_as_binary<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
@@ -797,3 +823,5 @@ mod tests {
         // TODO
     }
 }
+
+
