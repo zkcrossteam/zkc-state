@@ -1,0 +1,20 @@
+on: [push, pull_request]
+
+name: Continuous integration
+
+jobs:
+  check:
+    name: Check protobuf definitions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: arduino/setup-protoc@v2
+      - run: |
+          set -xeuo pipefail
+          ./scripts/update_protos.sh
+          if git diff --exit-code; then
+            echo "Protobuf files in a inconsistent state"
+            echo "Run ./scripts/update_protos.sh and commit updates to git repo"
+            exit 1
+          fi
+
