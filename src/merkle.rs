@@ -2,7 +2,104 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 
-use crate::proto::NodeType;
+pub use utils::*;
+
+pub mod utils {
+    use super::*;
+    use crate::proto::NodeType;
+
+    pub fn get_offset(index: u32) -> u32 {
+        let height = (index + 1).ilog2();
+        let full = (1u32 << height) - 1;
+        index - full
+    }
+
+    pub fn get_node_type(index: u32, height: usize) -> NodeType {
+        assert!(height < 32);
+        let height = height as u32;
+        if index >= (2_u32.pow(height + 1) - 1) {
+            NodeType::NodeInvalid
+        } else if index >= (2_u32.pow(height) - 1) {
+            NodeType::NodeLeaf
+        } else {
+            NodeType::NodeNonLeaf
+        }
+    }
+
+    pub fn boundary_check(index: u32, height: usize) -> Result<(), MerkleError> {
+        let node_type = get_node_type(index, height);
+        if node_type == NodeType::NodeInvalid {
+            Err(MerkleError::new(
+                [0; 32],
+                index,
+                MerkleErrorCode::InvalidIndex,
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /*
+     * Check that an index is a leaf.
+     * Example: Given D=2 and a merkle tree as follows:
+     * 0
+     * 1 2
+     * 3 4 5 6
+     * then leaf index >= 3 which is (2^D - 1)
+     *
+     * Moreover, nodes at depth k start at
+     * first = 2^k-1, last = 2^{k+1}-2
+     */
+    pub fn leaf_check(index: u32, height: usize) -> Result<(), MerkleError> {
+        let node_type = get_node_type(index, height);
+        if node_type != NodeType::NodeLeaf {
+            Err(MerkleError::new(
+                [0; 32],
+                index,
+                MerkleErrorCode::InvalidLeafIndex,
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn get_sibling_index(index: u32) -> u32 {
+        if index % 2 == 1 {
+            index + 1
+        } else {
+            index - 1
+        }
+    }
+
+    /// get the index from leaf to the root
+    /// root index is not included in the result as root index is always 0
+    /// Example: Given D=3 and a merkle tree as follows:
+    /// 0
+    /// 1 2
+    /// 3 4 5 6
+    /// 7 8 9 10 11 12 13 14
+    /// get_path(7) = [3, 1]
+    /// get_path(15) = [6, 2]
+    pub fn get_path(index: u32, height: usize) -> Result<Vec<u32>, MerkleError> {
+        leaf_check(index, height)?;
+        let mut height = (index + 1).ilog2();
+        let round = height;
+        let full = (1u32 << height) - 1;
+        let mut p = index - full;
+        let mut path = vec![];
+        for _ in 0..round {
+            let full = (1u32 << height) - 1;
+            // Calculate the index of current node
+            let i = full + p;
+            path.insert(0, i);
+            height -= 1;
+            // Caculate the offset of parent
+            p /= 2;
+        }
+        assert!(p == 0);
+        Ok(path)
+    }
+}
 
 /*
 const LEAF_SIG: u8 = 0u8;
@@ -62,24 +159,6 @@ pub struct MerkleProof<H: Debug + Clone + PartialEq, const D: usize> {
     pub index: u32,
 }
 
-fn get_offset(index: u32) -> u32 {
-    let height = (index + 1).ilog2();
-    let full = (1u32 << height) - 1;
-    index - full
-}
-
-pub fn get_node_type(index: u32, height: usize) -> NodeType {
-    assert!(height < 32);
-    let height = height as u32;
-    if index >= (2_u32.pow(height + 1) - 1) {
-        NodeType::NodeInvalid
-    } else if index >= (2_u32.pow(height) - 1) {
-        NodeType::NodeLeaf
-    } else {
-        NodeType::NodeNonLeaf
-    }
-}
-
 pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
     type Node: MerkleNode<H>;
     type Id;
@@ -98,46 +177,15 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
     fn update_root_hash(&mut self, hash: &H);
 
     fn boundary_check(&self, index: u32) -> Result<(), MerkleError> {
-        if index >= (2_u32.pow(D as u32 + 1) - 1) {
-            Err(MerkleError::new(
-                [0; 32],
-                index,
-                MerkleErrorCode::InvalidIndex,
-            ))
-        } else {
-            Ok(())
-        }
+        boundary_check(index, D)
     }
 
-    /*
-     * Check that an index is a leaf.
-     * Example: Given D=2 and a merkle tree as follows:
-     * 0
-     * 1 2
-     * 3 4 5 6
-     * then leaf index >= 3 which is (2^D - 1)
-     *
-     * Moreover, nodes at depth k start at
-     * first = 2^k-1, last = 2^{k+1}-2
-     */
     fn leaf_check(&self, index: u32) -> Result<(), MerkleError> {
-        if index >= (2_u32.pow(D as u32) - 1) && index < (2_u32.pow((D as u32) + 1) - 1) {
-            Ok(())
-        } else {
-            Err(MerkleError::new(
-                [0; 32],
-                index,
-                MerkleErrorCode::InvalidLeafIndex,
-            ))
-        }
+        leaf_check(index, D)
     }
 
     fn get_sibling_index(&self, index: u32) -> u32 {
-        if index % 2 == 1 {
-            index + 1
-        } else {
-            index - 1
-        }
+        get_sibling_index(index)
     }
 
     /// get the index from leaf to the root
@@ -150,23 +198,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
     /// get_path(7) = [3, 1]
     /// get_path(15) = [6, 2]
     fn get_path(&self, index: u32) -> Result<[u32; D], MerkleError> {
-        self.leaf_check(index)?;
-        let mut height = (index + 1).ilog2();
-        let round = height;
-        let full = (1u32 << height) - 1;
-        let mut p = index - full;
-        let mut path = vec![];
-        for _ in 0..round {
-            let full = (1u32 << height) - 1;
-            // Calculate the index of current node
-            let i = full + p;
-            path.insert(0, i);
-            height -= 1;
-            // Caculate the offset of parent
-            p /= 2;
-        }
-        assert!(p == 0);
-        Ok(path.try_into().unwrap())
+        Ok(get_path(index, D)?.try_into().unwrap())
     }
 
     fn get_leaf_with_proof(
@@ -370,5 +402,9 @@ mod tests {
         assert_eq!(root, 6_u64);
     }
 }
+
+
+
+
 
 
