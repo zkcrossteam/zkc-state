@@ -377,7 +377,7 @@ mod tests {
 
         // 1
         let mut mt = MongoMerkle::construct(TEST_ADDR, DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(drop_collection::<MerkleRecord>(
+        executor::block_on(drop_collection(
             MongoMerkle::get_db_name(),
             mt.get_collection_name(),
         ))
@@ -484,7 +484,7 @@ mod tests {
 
         // 1
         let mut mt = MongoMerkle::construct(TEST_ADDR, DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(drop_collection::<MerkleRecord>(
+        executor::block_on(drop_collection(
             MongoMerkle::get_db_name(),
             mt.get_collection_name(),
         ))
@@ -599,7 +599,7 @@ mod tests {
 
         // 1
         let mut mt = MongoMerkle::construct(TEST_ADDR, DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(drop_collection::<MerkleRecord>(
+        executor::block_on(drop_collection(
             MongoMerkle::get_db_name(),
             mt.get_collection_name(),
         ))
@@ -704,6 +704,9 @@ mod tests {
         //     index: 1*64
         //     data: 4:64
         // }
-        todo!()
+
+        // TODO
     }
 }
+
+
