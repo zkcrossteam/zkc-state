@@ -1,0 +1,43 @@
+on: [push, pull_request]
+
+name: Continuous integration
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      # Install rust-toolchain from rust-toolchain file
+      # See https://github.com/dtolnay/rust-toolchain/issues/77#issuecomment-1462824940
+      - uses: dsherret/rust-toolchain-file@v1
+      - run: cargo check
+
+  test:
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - 27017:27017
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dsherret/rust-toolchain-file@v1
+      - run: cargo test
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dsherret/rust-toolchain-file@v1
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dsherret/rust-toolchain-file@v1
+      - run: cargo clippy -- -D warnings
