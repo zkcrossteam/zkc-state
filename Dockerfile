@@ -1,6 +1,6 @@
 FROM rust:1.66-alpine as builder
 
-RUN apk add --no-cache musl-dev protoc
+RUN apk add --no-cache musl-dev protoc protobuf-dev
 
 WORKDIR /usr/src/app
 
@@ -13,6 +13,7 @@ COPY ./ ./
 RUN cargo install --frozen --offline --path .
 
 FROM alpine:3.18
-COPY --from=builder /usr/local/cargo/bin/* /usr/local/bin/myapp
+COPY --from=builder /usr/local/cargo/bin/zkc_state_manager /usr/local/bin/myapp
+EXPOSE 50051
 CMD ["myapp"]
 

@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "google/api/annotations.proto";
+
 package kvpair;
 
 message NodeChildren {
@@ -93,7 +95,11 @@ message SetNonLeafRequest {
 message SetNonLeafResponse { Node node = 1; }
 
 service KVPair {
-  rpc GetRoot(GetRootRequest) returns (GetRootResponse) {}
+  rpc GetRoot(GetRootRequest) returns (GetRootResponse) {
+    option (google.api.http) = {
+      get : "/v1/root"
+    };
+  }
   rpc SetRoot(SetRootRequest) returns (SetRootResponse) {}
 
   rpc GetLeaf(GetLeafRequest) returns (GetLeafResponse) {}
