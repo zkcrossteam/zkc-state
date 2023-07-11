@@ -29,5 +29,3 @@ impl From<Error> for Status {
         }
     }
 }
-
-
