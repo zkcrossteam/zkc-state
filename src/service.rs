@@ -1,15 +1,17 @@
 use std::borrow::Borrow;
 
 use crate::kvpair::{LeafData, MERKLE_TREE_HEIGHT};
-use crate::merkle::{get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof, MerkleTree};
+use crate::merkle::{
+    get_offset, get_path, get_sibling_index, hash_children, leaf_check, MerkleNode, MerkleProof,
+};
 use crate::Error;
 
 use super::kvpair::{bytes_to_bson, ContractId, Hash, MerkleRecord};
-use mongodb::bson::{doc, Document};
+use mongodb::bson::{doc, to_bson, Document};
 use mongodb::error::{TRANSIENT_TRANSACTION_ERROR, UNKNOWN_TRANSACTION_COMMIT_RESULT};
 use mongodb::options::{
     Acknowledgment, FindOneOptions, InsertOneOptions, ReadConcern, ReplaceOptions,
-    TransactionOptions, WriteConcern,
+    TransactionOptions, UpdateModifications, UpdateOptions, WriteConcern,
 };
 use mongodb::results::{InsertOneResult, UpdateResult};
 use mongodb::{Client, ClientSession, Collection};
@@ -92,6 +94,11 @@ impl<T> MongoCollection<T> {
 }
 
 impl MongoCollection<MerkleRecord> {
+    // Special ObjectId to track current root.
+    pub fn get_current_root_object_id() -> mongodb::bson::oid::ObjectId {
+        mongodb::bson::oid::ObjectId::from_bytes([0; 12])
+    }
+
     pub async fn find_one(
         &mut self,
         filter: impl Into<Option<Document>>,
@@ -141,6 +148,23 @@ impl MongoCollection<MerkleRecord> {
                     .replace_one(query, replacement, options)
                     .await?
             }
+        };
+        Ok(result)
+    }
+
+    pub async fn update_one(
+        &mut self,
+        query: Document,
+        update: impl Into<UpdateModifications>,
+        options: impl Into<Option<UpdateOptions>>,
+    ) -> Result<UpdateResult, mongodb::error::Error> {
+        let result = match self.session.as_mut() {
+            Some(session) => {
+                self.collection
+                    .update_one_with_session(query, update, options, session)
+                    .await?
+            }
+            _ => self.collection.update_one(query, update, options).await?,
         };
         Ok(result)
     }
@@ -199,14 +223,54 @@ impl MongoCollection<MerkleRecord> {
         )
     }
 
+    pub async fn insert_leaf_node(
+        &mut self,
+        index: u32,
+        hash: &Hash,
+        data: &LeafData,
+    ) -> Result<MerkleRecord, Error> {
+        let mut record = MerkleRecord::default();
+        record.index = index;
+        record.hash = hash.0;
+        record.data = data.0;
+        self.insert_merkle_record(&record).await
+    }
+
+    pub async fn insert_non_leaf_node(
+        &mut self,
+        index: u32,
+        hash: Hash,
+        left: Hash,
+        right: Hash,
+    ) -> Result<MerkleRecord, Error> {
+        let mut record = MerkleRecord::default();
+        record.index = index;
+        record.hash = hash.0;
+        record.left = left.0;
+        record.right = right.0;
+        self.insert_merkle_record(&record).await
+    }
+
     pub async fn update_root_merkle_record(
         &mut self,
         record: &MerkleRecord,
     ) -> Result<MerkleRecord, Error> {
         assert_eq!(record.hash, Hash::default().0);
-        let mut filter = doc! {};
-        filter.insert("hash", bytes_to_bson(&record.hash));
-        let result = self.replace_one(filter, record, None).await?;
+        let filter = doc! {"_id": Self::get_current_root_object_id()};
+        let update = doc! {
+            "$set": {
+                "hash": to_bson(&Hash::from(record.hash)).unwrap(),
+                "left": to_bson(&Hash::from(record.left)).unwrap(),
+                "right": to_bson(&Hash::from(record.right)).unwrap(),
+                "data": to_bson(&LeafData::from(record.data)).unwrap(),
+            },
+            // We use this to track the number of root updates.
+            "$inc": {
+                "index": 1i64,
+            },
+        };
+        let options = UpdateOptions::builder().upsert(true).build();
+        let result = self.update_one(filter, update, options).await?;
         dbg!(&result);
         Ok(*record)
     }
@@ -248,6 +312,40 @@ impl MongoCollection<MerkleRecord> {
                 index,
             },
         ))
+    }
+
+    async fn set_leaf_and_get_proof(
+        &mut self,
+        leaf: &MerkleRecord,
+    ) -> Result<MerkleProof<Hash, MERKLE_TREE_HEIGHT>, Error> {
+        let index = leaf.index();
+        let mut hash = leaf.hash();
+        let (_, mut proof) = self.get_leaf_and_proof(index).await?;
+        proof.source = hash.clone().into();
+        let mut p = get_offset(index);
+        self.insert_merkle_record(leaf).await?;
+        for i in 0..MERKLE_TREE_HEIGHT {
+            let cur_hash = hash;
+            let depth = MERKLE_TREE_HEIGHT - i - 1;
+            let (left, right) = if p % 2 == 1 {
+                (proof.assist[depth].0, cur_hash)
+            } else {
+                (cur_hash, proof.assist[depth].0)
+            };
+            hash = hash_children(&left, &right);
+            p /= 2;
+            let index = p + (1 << depth) - 1;
+            let mut record = MerkleRecord::default();
+            record.index = index;
+            record.hash = hash;
+            record.left = left;
+            record.right = right;
+            self.insert_merkle_record(&record).await?;
+            if index == 0 {
+                self.update_root_merkle_record(&record).await?;
+            }
+        }
+        Ok(proof)
     }
 }
 
