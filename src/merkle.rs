@@ -161,6 +161,7 @@ pub struct MerkleProof<H: Debug + Clone + PartialEq, const D: usize> {
     pub index: u32,
 }
 
+#[tonic::async_trait]
 pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
     type Node: MerkleNode<H>;
     type Id;
@@ -171,12 +172,18 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
     fn construct(addr: Self::Id, id: Self::Root) -> Self;
 
     fn hash(a: &H, b: &H) -> H;
-    fn set_parent(&mut self, index: u32, hash: &H, left: &H, right: &H) -> Result<(), MerkleError>;
-    fn set_leaf(&mut self, leaf: &Self::Node) -> Result<(), MerkleError>;
-    fn get_node_with_hash(&self, index: u32, hash: &H) -> Result<Self::Node, MerkleError>;
+    async fn set_parent(
+        &mut self,
+        index: u32,
+        hash: &H,
+        left: &H,
+        right: &H,
+    ) -> Result<(), MerkleError>;
+    async fn set_leaf(&mut self, leaf: &Self::Node) -> Result<(), MerkleError>;
+    async fn get_node_with_hash(&self, index: u32, hash: &H) -> Result<Self::Node, MerkleError>;
 
-    fn get_root_hash(&self) -> H;
-    fn update_root_hash(&mut self, hash: &H);
+    async fn get_root_hash(&self) -> H;
+    async fn update_root_hash(&mut self, hash: &H);
 
     fn boundary_check(&self, index: u32) -> Result<(), MerkleError> {
         boundary_check(index, D)
@@ -203,52 +210,53 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
         Ok(get_path(index, D)?.try_into().unwrap())
     }
 
-    fn get_leaf_with_proof(
+    async fn get_leaf_with_proof(
         &self,
         index: u32,
     ) -> Result<(Self::Node, MerkleProof<H, D>), MerkleError> {
         self.leaf_check(index)?;
         let paths = self.get_path(index)?.to_vec();
         // We push the search from the top
-        let hash = self.get_root_hash();
+        let hash = self.get_root_hash().await;
         let mut acc = 0;
-        let mut acc_node = self.get_node_with_hash(acc, &hash)?;
-        let assist: Vec<H> = paths
-            .into_iter()
-            .map(|child| {
-                let (hash, sibling_hash) = if (acc + 1) * 2 == child + 1 {
-                    // left child
-                    (acc_node.left().unwrap(), acc_node.right().unwrap())
-                } else {
-                    assert!((acc + 1) * 2 == child);
-                    (acc_node.right().unwrap(), acc_node.left().unwrap())
-                };
-                let sibling = self.get_sibling_index(child);
-                let sibling_node = self.get_node_with_hash(sibling, &sibling_hash)?;
-                acc = child;
-                acc_node = self.get_node_with_hash(acc, &hash)?;
-                Ok(sibling_node.hash())
-            })
-            .collect::<Result<Vec<H>, _>>()?;
+        let mut acc_node = self.get_node_with_hash(acc, &hash).await?;
+        let mut assist = Vec::<H>::with_capacity(D);
+        for child in paths {
+            let (hash, sibling_hash) = if (acc + 1) * 2 == child + 1 {
+                // left child
+                (acc_node.left().unwrap(), acc_node.right().unwrap())
+            } else {
+                assert!((acc + 1) * 2 == child);
+                (acc_node.right().unwrap(), acc_node.left().unwrap())
+            };
+            let sibling = self.get_sibling_index(child);
+            let sibling_node = self.get_node_with_hash(sibling, &sibling_hash).await?;
+            acc = child;
+            acc_node = self.get_node_with_hash(acc, &hash).await?;
+            assist.push(sibling_node.hash())
+        }
         let hash = acc_node.hash();
         Ok((
             acc_node,
             MerkleProof {
                 source: hash,
-                root: self.get_root_hash(),
+                root: self.get_root_hash().await,
                 assist: assist.try_into().unwrap(),
                 index,
             },
         ))
     }
 
-    fn set_leaf_with_proof(&mut self, leaf: &Self::Node) -> Result<MerkleProof<H, D>, MerkleError> {
+    async fn set_leaf_with_proof(
+        &mut self,
+        leaf: &Self::Node,
+    ) -> Result<MerkleProof<H, D>, MerkleError> {
         let index = leaf.index();
         let mut hash = leaf.hash();
-        let (_, mut proof) = self.get_leaf_with_proof(index)?;
+        let (_, mut proof) = self.get_leaf_with_proof(index).await?;
         proof.source = hash.clone();
         let mut p = get_offset(index);
-        self.set_leaf(leaf)?;
+        self.set_leaf(leaf).await?;
         for i in 0..D {
             let cur_hash = hash;
             let depth = D - i - 1;
@@ -267,7 +275,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
         Ok(proof)
     }
 
-    fn update_leaf_data_with_proof(
+    async fn update_leaf_data_with_proof(
         &mut self,
         index: u32,
         data: &Vec<u8>,
@@ -344,12 +352,16 @@ mod tests {
         fn hash(a: &u64, b: &u64) -> u64 {
             a + b
         }
-        fn get_root_hash(&self) -> u64 {
+        async fn get_root_hash(&self) -> u64 {
             self.data[0]
         }
-        fn update_root_hash(&mut self, _h: &u64) {}
+        async fn update_root_hash(&mut self, _h: &u64) {}
 
-        fn get_node_with_hash(&self, index: u32, _hash: &u64) -> Result<Self::Node, MerkleError> {
+        async fn get_node_with_hash(
+            &self,
+            index: u32,
+            _hash: &u64,
+        ) -> Result<Self::Node, MerkleError> {
             self.boundary_check(index)?;
             Ok(MerkleU64Node {
                 value: self.data[index as usize],
@@ -357,7 +369,7 @@ mod tests {
             })
         }
 
-        fn set_parent(
+        async fn set_parent(
             &mut self,
             index: u32,
             hash: &u64,
@@ -368,7 +380,7 @@ mod tests {
             self.data[index as usize] = *hash;
             Ok(())
         }
-        fn set_leaf(&mut self, leaf: &Self::Node) -> Result<(), MerkleError> {
+        async fn set_leaf(&mut self, leaf: &Self::Node) -> Result<(), MerkleError> {
             self.leaf_check(leaf.index())?;
             self.data[leaf.index() as usize] = leaf.value;
             Ok(())
