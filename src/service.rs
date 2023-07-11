@@ -1,12 +1,10 @@
 use std::borrow::Borrow;
 
 use crate::kvpair::{LeafData, MERKLE_TREE_HEIGHT};
-use crate::merkle::{
-    get_offset, get_path, get_sibling_index, hash_children, leaf_check, MerkleNode, MerkleProof,
-};
+use crate::merkle::{get_offset, get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof};
 use crate::Error;
 
-use super::kvpair::{bytes_to_bson, ContractId, Hash, MerkleRecord};
+use super::kvpair::{hash_to_bson, ContractId, Hash, MerkleRecord};
 use mongodb::bson::{doc, to_bson, Document};
 use mongodb::error::{TRANSIENT_TRANSACTION_ERROR, UNKNOWN_TRANSACTION_COMMIT_RESULT};
 use mongodb::options::{
@@ -176,7 +174,7 @@ impl MongoCollection<MerkleRecord> {
     ) -> Result<Option<MerkleRecord>, Error> {
         let mut filter = doc! {};
         filter.insert("index", index);
-        filter.insert("hash", bytes_to_bson(&hash.0));
+        filter.insert("hash", hash_to_bson(&hash));
         let record = self.find_one(filter, None).await?;
         Ok(record)
     }
@@ -193,7 +191,7 @@ impl MongoCollection<MerkleRecord> {
     pub async fn get_root_merkle_record(&mut self) -> Result<Option<MerkleRecord>, Error> {
         let hash = Hash::default();
         let mut filter = doc! {};
-        filter.insert("hash", bytes_to_bson(&hash.0));
+        filter.insert("hash", hash_to_bson(&hash));
         let record = self.find_one(filter, None).await?;
         Ok(record)
     }
@@ -209,11 +207,12 @@ impl MongoCollection<MerkleRecord> {
     ) -> Result<MerkleRecord, Error> {
         let mut filter = doc! {};
         filter.insert("index", record.index);
-        filter.insert("hash", bytes_to_bson(&record.hash));
+        filter.insert("hash", hash_to_bson(&record.hash));
         let exists = self.find_one(filter, None).await?;
         exists.map_or(
             {
-                self.insert_one(record, None).await?;
+                let result = self.insert_one(record, None).await?;
+                dbg!(&result);
                 Ok(*record)
             },
             |record| {
@@ -231,8 +230,8 @@ impl MongoCollection<MerkleRecord> {
     ) -> Result<MerkleRecord, Error> {
         let mut record = MerkleRecord::default();
         record.index = index;
-        record.hash = hash.0;
-        record.data = data.0;
+        record.hash = *hash;
+        record.data = *data;
         self.insert_merkle_record(&record).await
     }
 
@@ -245,9 +244,9 @@ impl MongoCollection<MerkleRecord> {
     ) -> Result<MerkleRecord, Error> {
         let mut record = MerkleRecord::default();
         record.index = index;
-        record.hash = hash.0;
-        record.left = left.0;
-        record.right = right.0;
+        record.hash = hash;
+        record.left = left;
+        record.right = right;
         self.insert_merkle_record(&record).await
     }
 
@@ -255,7 +254,6 @@ impl MongoCollection<MerkleRecord> {
         &mut self,
         record: &MerkleRecord,
     ) -> Result<MerkleRecord, Error> {
-        assert_eq!(record.hash, Hash::default().0);
         let filter = doc! {"_id": Self::get_current_root_object_id()};
         let update = doc! {
             "$set": {
@@ -328,11 +326,11 @@ impl MongoCollection<MerkleRecord> {
             let cur_hash = hash;
             let depth = MERKLE_TREE_HEIGHT - i - 1;
             let (left, right) = if p % 2 == 1 {
-                (proof.assist[depth].0, cur_hash)
+                (proof.assist[depth], cur_hash)
             } else {
-                (cur_hash, proof.assist[depth].0)
+                (cur_hash, proof.assist[depth])
             };
-            hash = hash_children(&left, &right);
+            hash = Hash::hash_children(&left, &right);
             p /= 2;
             let index = p + (1 << depth) - 1;
             let mut record = MerkleRecord::default();
@@ -420,7 +418,7 @@ impl KvPair for MongoKvPair {
         let leaf_data: LeafData = request.leaf_data.as_slice().try_into()?;
         let record = collection.get_merkle_record(index, &hash).await?;
         let record = match record {
-            Some(record) if record.data == leaf_data.0 => record,
+            Some(record) if record.data == leaf_data => record,
             _ => todo!(),
         };
         let node = record.try_into()?;
