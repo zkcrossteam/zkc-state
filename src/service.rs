@@ -16,6 +16,8 @@ use mongodb::{Client, ClientSession, Collection};
 use tonic::{Request, Response, Status};
 
 use super::proto::kv_pair_server::KvPair;
+use super::proto::Proof;
+use super::proto::ProofType;
 use super::proto::*;
 
 pub struct MongoKvPair {
@@ -195,6 +197,7 @@ impl MongoCollection<MerkleRecord> {
     pub async fn get_root_merkle_record(&mut self) -> Result<Option<MerkleRecord>, Error> {
         let filter = doc! {"_id": Self::get_current_root_object_id()};
         let record = self.find_one(filter, None).await?;
+        dbg!(record);
         if record.is_some() {
             return Ok(record);
         }
@@ -419,14 +422,41 @@ impl KvPair for MongoKvPair {
         let request = request.into_inner();
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
-        let hash: Hash = request.hash.as_slice().try_into()?;
-        let record = collection.must_get_merkle_record(index, &hash).await?;
+        let proof_v0 = ProofType::ProofV0 as i32;
+        let (record, proof) = match (request.hash.as_ref(), request.proof_type) {
+            // Get merkle records in a faster way
+            (Some(hash), _) if request.proof_type != proof_v0 => {
+                let hash: Hash = hash.as_slice().try_into()?;
+                let record = collection.must_get_merkle_record(index, &hash).await?;
+                (record, None)
+            }
+            (_, _) => {
+                let (record, proof) = collection.get_leaf_and_proof(index).await?;
+                if request.hash.is_some() {
+                    let hash: Hash = request.hash.unwrap().as_slice().try_into()?;
+                    if hash != proof.source {
+                        return Err(
+                            Error::InvalidArgument("Leaf not in current root".to_string()).into(),
+                        );
+                    }
+                }
+                let proof_bytes = if request.proof_type == proof_v0 {
+                    Some(Proof {
+                        proof_type: request.proof_type,
+                        proof: bincode::serialize(&proof).unwrap(),
+                    })
+                } else {
+                    None
+                };
+                (record, proof_bytes)
+            }
+        };
         let node = record.try_into()?;
         collection.commit().await.map_err(Error::from)?;
-        dbg!(&record, &node);
+        dbg!(&record, &node, &proof);
         Ok(Response::new(GetLeafResponse {
             node: Some(node),
-            proof: None,
+            proof,
         }))
     }
 
@@ -443,8 +473,6 @@ impl KvPair for MongoKvPair {
         let hash: Hash = request.hash.as_slice().try_into()?;
         let leaf_data: LeafData = request.leaf_data.as_slice().try_into()?;
         let record = MerkleRecord::new_leaf(index, hash, leaf_data);
-        use crate::proto::Proof;
-        use crate::proto::ProofType;
         let proof = collection.set_leaf_and_get_proof(&record).await?;
         let proof = if request.proof_type == ProofType::ProofV0 as i32 {
             Some(Proof {

@@ -48,7 +48,7 @@ message SetRootResponse { bytes root = 1; }
 
 message GetLeafRequest {
   uint32 index = 1;
-  bytes hash = 2;
+  optional bytes hash = 2;
   ProofType proof_type = 3;
 }
 
