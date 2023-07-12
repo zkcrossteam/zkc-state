@@ -5,8 +5,11 @@ use std::fmt::Debug;
 pub use utils::*;
 
 pub mod utils {
+    use ff::PrimeField;
+    use halo2_proofs::pairing::bn256::Fr;
+
     use super::*;
-    use crate::proto::NodeType;
+    use crate::{poseidon::gen_hasher, proto::NodeType};
 
     pub fn get_offset(index: u32) -> u32 {
         let height = (index + 1).ilog2();
@@ -98,6 +101,14 @@ pub mod utils {
         }
         assert!(p == 0);
         Ok(path)
+    }
+
+    pub fn hash_children(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
+        let mut hasher = gen_hasher();
+        let a = Fr::from_repr(*a).unwrap();
+        let b = Fr::from_repr(*b).unwrap();
+        hasher.update(&[a, b]);
+        hasher.squeeze().to_repr()
     }
 }
 

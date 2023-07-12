@@ -19,8 +19,12 @@ use serde::{
 
 pub const MERKLE_TREE_HEIGHT: usize = 20;
 
-#[derive(Copy, Debug, Clone, Eq, PartialEq)]
-pub struct ContractId(pub [u8; 32]);
+#[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub struct ContractId(
+    #[serde(serialize_with = "self::serialize_bytes_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
+    pub [u8; 32],
+);
 
 // TODO: Maybe use something like protovalidate to automatically validate fields.
 impl TryFrom<&[u8]> for ContractId {
@@ -47,8 +51,12 @@ impl From<[u8; 32]> for ContractId {
     }
 }
 
-#[derive(Copy, Debug, Clone, Eq, PartialEq, Default)]
-pub struct Hash(pub [u8; 32]);
+#[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub struct Hash(
+    #[serde(serialize_with = "self::serialize_bytes_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
+    pub [u8; 32],
+);
 
 // TODO: Maybe use something like protovalidate to automatically validate fields.
 impl TryFrom<&[u8]> for Hash {
@@ -73,8 +81,12 @@ impl From<[u8; 32]> for Hash {
     }
 }
 
-#[derive(Copy, Debug, Clone, Eq, PartialEq, Default)]
-pub struct LeafData(pub [u8; 32]);
+#[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub struct LeafData(
+    #[serde(serialize_with = "self::serialize_bytes_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
+    pub [u8; 32],
+);
 
 // TODO: Maybe use something like protovalidate to automatically validate fields.
 impl TryFrom<&[u8]> for LeafData {
@@ -196,7 +208,7 @@ impl MongoMerkle {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq)]
 pub struct MerkleRecord {
     pub index: u32,
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
