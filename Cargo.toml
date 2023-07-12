@@ -31,6 +31,7 @@ tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
 prost = "0.11"
 tracing-subscriber = "0.3.17"
 tonic-reflection = "0.9.2"
+thiserror = "1.0.43"
 
 [build-dependencies]
 tonic-build = "0.9.2"

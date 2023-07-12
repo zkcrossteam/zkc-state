@@ -3462,6 +3462,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "subtle",
+ "thiserror",
  "tokio",
  "tonic",
  "tonic-build",

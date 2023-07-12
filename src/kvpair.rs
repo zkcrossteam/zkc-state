@@ -1,6 +1,7 @@
 use crate::merkle::get_node_type;
 use crate::proto::node::NodeData;
 use crate::proto::{Node, NodeChildren, NodeType};
+use crate::Error;
 
 use super::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleTree};
 use super::poseidon::gen_hasher;
@@ -12,10 +13,9 @@ use mongodb::bson::{spec::BinarySubtype, Bson};
 use mongodb::options::DropCollectionOptions;
 use mongodb::{bson::doc, Client};
 use serde::{
-    de::{Error, Unexpected},
+    de::{Error as SerdeError, Unexpected},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use tonic::Status;
 
 pub const MERKLE_TREE_HEIGHT: usize = 20;
 
@@ -24,12 +24,12 @@ pub struct ContractId(pub [u8; 32]);
 
 // TODO: Maybe use something like protovalidate to automatically validate fields.
 impl TryFrom<&[u8]> for ContractId {
-    type Error = Status;
+    type Error = Error;
 
     fn try_from(a: &[u8]) -> Result<ContractId, Self::Error> {
         a.try_into()
             .map_err(|_e| {
-                Status::invalid_argument(format!("Contract Id malformed (must be [u8; 32])"))
+                Error::InvalidArgument(format!("Contract Id malformed (must be [u8; 32])"))
             })
             .map(|id| ContractId(id))
     }
@@ -41,16 +41,22 @@ impl From<ContractId> for Vec<u8> {
     }
 }
 
-#[derive(Copy, Debug, Clone, Eq, PartialEq)]
+impl From<[u8; 32]> for ContractId {
+    fn from(id: [u8; 32]) -> Self {
+        Self(id)
+    }
+}
+
+#[derive(Copy, Debug, Clone, Eq, PartialEq, Default)]
 pub struct Hash(pub [u8; 32]);
 
 // TODO: Maybe use something like protovalidate to automatically validate fields.
 impl TryFrom<&[u8]> for Hash {
-    type Error = Status;
+    type Error = Error;
 
     fn try_from(a: &[u8]) -> Result<Hash, Self::Error> {
         a.try_into()
-            .map_err(|_e| Status::invalid_argument(format!("Hash malformed (must be [u8; 32])")))
+            .map_err(|_e| Error::InvalidArgument(format!("Hash malformed (must be [u8; 32])")))
             .map(|hash| Hash(hash))
     }
 }
@@ -58,6 +64,12 @@ impl TryFrom<&[u8]> for Hash {
 impl From<Hash> for Vec<u8> {
     fn from(hash: Hash) -> Self {
         hash.0.into()
+    }
+}
+
+impl From<[u8; 32]> for Hash {
+    fn from(hash: [u8; 32]) -> Self {
+        Self(hash)
     }
 }
 
@@ -69,7 +81,7 @@ where
 {
     match Bson::deserialize(deserializer) {
         Ok(Bson::Binary(bytes)) => Ok(bytes.bytes.try_into().unwrap()),
-        Ok(..) => Err(Error::invalid_value(Unexpected::Enum, &"Bson::Binary")),
+        Ok(..) => Err(SerdeError::invalid_value(Unexpected::Enum, &"Bson::Binary")),
         Err(e) => Err(e),
     }
 }
@@ -176,15 +188,15 @@ pub struct MerkleRecord {
 }
 
 impl TryFrom<MerkleRecord> for Node {
-    type Error = Status;
+    type Error = Error;
 
     fn try_from(record: MerkleRecord) -> Result<Self, Self::Error> {
         let index = record.index();
         let hash = record.hash().into();
         let node_type = get_node_type(index, MERKLE_TREE_HEIGHT);
         if node_type != NodeType::NodeLeaf && node_type != NodeType::NodeNonLeaf {
-            return Err(Status::internal(
-                "Invalid node (must be leaf or nonleaf node)",
+            return Err(Error::InconsistentData(
+                "Invalid node (must be leaf or nonleaf node)".to_string(),
             ));
         }
         let node_data = if node_type == NodeType::NodeLeaf {
@@ -192,11 +204,15 @@ impl TryFrom<MerkleRecord> for Node {
         } else {
             let left_child_hash = record
                 .left()
-                .ok_or(Status::internal("Nonleaf node has no children"))?
+                .ok_or(Error::InconsistentData(
+                    "Nonleaf node has no children".to_string(),
+                ))?
                 .into();
             let right_child_hash = record
                 .right()
-                .ok_or(Status::internal("Nonleaf node has no children"))?
+                .ok_or(Error::InconsistentData(
+                    "Nonleaf node has no children".to_string(),
+                ))?
                 .into();
             NodeData::Children(NodeChildren {
                 left_child_hash,
