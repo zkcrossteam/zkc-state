@@ -1,0 +1,19 @@
+services:
+  mongodb:
+    image: mongo:6
+    ports:
+      - 27017:27017
+
+  envoy:
+    build: ./server/envoy
+    ports:
+      - 9901:9901
+      - 50000:50000
+  auth:
+    build: ./services/auth
+
+  kvpair:
+    build:
+      context: .
+    environment:
+      - DATABASE_URI=postgres://postgres:postgres@users-database:5432/users
