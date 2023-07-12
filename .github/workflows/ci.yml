@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: arduino/setup-protoc@v2
       # Install rust-toolchain from rust-toolchain file
       # See https://github.com/dtolnay/rust-toolchain/issues/77#issuecomment-1462824940
       - uses: dsherret/rust-toolchain-file@v1
@@ -23,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: arduino/setup-protoc@v2
       - uses: dsherret/rust-toolchain-file@v1
       - run: cargo test
 
@@ -31,6 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: arduino/setup-protoc@v2
       - uses: dsherret/rust-toolchain-file@v1
       - run: cargo fmt --all -- --check
 
@@ -39,5 +42,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: arduino/setup-protoc@v2
       - uses: dsherret/rust-toolchain-file@v1
       - run: cargo clippy -- -D warnings
