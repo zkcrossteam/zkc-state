@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 
-use crate::kvpair::LeafData;
+use crate::kvpair::{LeafData, MERKLE_TREE_HEIGHT};
+use crate::merkle::{get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof, MerkleTree};
 use crate::Error;
 
 use super::kvpair::{bytes_to_bson, ContractId, Hash, MerkleRecord};
@@ -209,6 +210,45 @@ impl MongoCollection<MerkleRecord> {
         dbg!(&result);
         Ok(*record)
     }
+
+    pub async fn get_leaf_and_proof(
+        &mut self,
+        index: u32,
+    ) -> Result<(MerkleRecord, MerkleProof<Hash, MERKLE_TREE_HEIGHT>), Error> {
+        leaf_check(index, MERKLE_TREE_HEIGHT)?;
+        let paths = get_path(index, MERKLE_TREE_HEIGHT)?;
+        // We push the search from the top
+        let mut acc = 0;
+        let mut acc_node = self.must_get_root_merkle_record().await?;
+        let root_hash = acc_node.hash;
+        let mut assist = Vec::with_capacity(MERKLE_TREE_HEIGHT);
+        for child in paths {
+            let (hash, sibling_hash) = if (acc + 1) * 2 == child + 1 {
+                // left child
+                (acc_node.left().unwrap(), acc_node.right().unwrap())
+            } else {
+                assert!((acc + 1) * 2 == child);
+                (acc_node.right().unwrap(), acc_node.left().unwrap())
+            };
+            let sibling = get_sibling_index(child);
+            let sibling_node = self
+                .must_get_merkle_record(sibling, &sibling_hash.into())
+                .await?;
+            acc = child;
+            acc_node = self.must_get_merkle_record(acc, &hash.into()).await?;
+            assist.push(Hash::from(sibling_node.hash()));
+        }
+        let hash = acc_node.hash();
+        Ok((
+            acc_node,
+            MerkleProof {
+                source: hash.into(),
+                root: root_hash.into(),
+                assist: assist.try_into().unwrap(),
+                index,
+            },
+        ))
+    }
 }
 
 impl MongoKvPair {
@@ -310,3 +350,7 @@ impl KvPair for MongoKvPair {
         unimplemented!()
     }
 }
+
+
+
+

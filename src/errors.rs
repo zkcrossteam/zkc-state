@@ -8,7 +8,7 @@ pub enum Error {
     #[error("Mongodb error: {0}")]
     Mongodb(#[from] mongodb::error::Error),
     #[error("Merkel tree error: {0:?}")]
-    Merkle(MerkleError),
+    Merkle(#[from] MerkleError),
     #[error("Invalid argument: {0}")]
     InvalidArgument(String),
     #[error("Inconsistent data: {0}")]
@@ -29,3 +29,5 @@ impl From<Error> for Status {
         }
     }
 }
+
+
