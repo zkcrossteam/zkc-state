@@ -36,8 +36,8 @@ func allowed() *auth.CheckResponse {
 				Headers: []*core.HeaderValueOption{
 					{
 						Header: &core.HeaderValue{
-							Key:   "x-custom-header-propagated-to-downstream-service",
-							Value: "bla-bla-bla",
+							Key:   "x-auth-contract-id",
+							Value: "FX6glXnwnPljB/ayPW/WHDz/EjB21Ewn4um+3wITXoc=",
 						},
 					},
 				},

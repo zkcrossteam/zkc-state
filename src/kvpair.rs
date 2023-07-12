@@ -30,6 +30,7 @@ lazy_static::lazy_static! {
             leaf_hash = Hash::hash_children(&leaf_hash, &leaf_hash);
             default_hash.push(leaf_hash);
         }
+        dbg!();
         default_hash.try_into().unwrap()
     };
 }
@@ -51,6 +52,19 @@ impl TryFrom<&[u8]> for ContractId {
                 Error::InvalidArgument(format!("Contract Id malformed (must be [u8; 32])"))
             })
             .map(|id| ContractId(id))
+    }
+}
+
+// TODO: Maybe use something like protovalidate to automatically validate fields.
+impl TryFrom<&str> for ContractId {
+    type Error = Error;
+
+    fn try_from(a: &str) -> Result<ContractId, Self::Error> {
+        use base64::{engine::general_purpose, Engine as _};
+        general_purpose::STANDARD
+            .decode(a)
+            .map_err(|e| Error::InvalidArgument(format!("Base64 decoding failed: {e}")))
+            .and_then(|v| Self::try_from(v.as_slice()))
     }
 }
 
@@ -833,3 +847,5 @@ mod tests {
         // TODO
     }
 }
+
+

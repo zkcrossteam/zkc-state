@@ -3452,6 +3452,7 @@ name = "zkc_state_manager"
 version = "0.1.0"
 dependencies = [
  "ark-std",
+ "base64 0.21.2",
  "bincode",
  "clap",
  "ff",

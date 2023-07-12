@@ -373,6 +373,20 @@ impl MongoKvPair {
     }
 }
 
+fn get_contract_id<T>(request: &Request<T>) -> Result<ContractId, Status> {
+    let id = request
+        .metadata()
+        .get("x-auth-contract-id")
+        .ok_or(Status::unauthenticated("Contract id not found"))?;
+    let contract_id = id
+        .to_str()
+        .map_err(|e| Status::unauthenticated(format!("Invalid Contract id: {e}")))?
+        .try_into()
+        .map_err(|e| Status::unauthenticated(format!("Invalid Contract id: {e}")))?;
+    dbg!(&contract_id);
+    Ok(contract_id)
+}
+
 #[tonic::async_trait]
 impl KvPair for MongoKvPair {
     async fn get_root(
@@ -380,12 +394,10 @@ impl KvPair for MongoKvPair {
         request: Request<GetRootRequest>,
     ) -> std::result::Result<Response<GetRootResponse>, Status> {
         dbg!(&request);
-        let request = request.into_inner();
-        let contract_id: ContractId = request.contract_id.as_slice().try_into()?;
+        let contract_id = get_contract_id(&request).unwrap_or_default();
         let mut collection = self.new_collection(&contract_id, false).await?;
         let record = collection.must_get_root_merkle_record().await?;
         Ok(Response::new(GetRootResponse {
-            contract_id: contract_id.into(),
             root: record.hash().into(),
         }))
     }
@@ -403,8 +415,8 @@ impl KvPair for MongoKvPair {
         request: Request<GetLeafRequest>,
     ) -> std::result::Result<Response<GetLeafResponse>, Status> {
         dbg!(&request);
+        let contract_id = get_contract_id(&request).unwrap_or_default();
         let request = request.into_inner();
-        let contract_id: ContractId = request.contract_id.as_slice().try_into()?;
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
         let hash: Hash = request.hash.as_slice().try_into()?;
@@ -423,8 +435,8 @@ impl KvPair for MongoKvPair {
         request: Request<SetLeafRequest>,
     ) -> std::result::Result<Response<GetLeafResponse>, Status> {
         dbg!(&request);
+        let contract_id = get_contract_id(&request).unwrap_or_default();
         let request = request.into_inner();
-        let contract_id: ContractId = request.contract_id.as_slice().try_into()?;
         // TODO: Should use session here
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
