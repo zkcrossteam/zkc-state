@@ -2,6 +2,8 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 
+use crate::proto::NodeType;
+
 /*
 const LEAF_SIG: u8 = 0u8;
 const INTERNAL_SIG: u8 = 1u8;
@@ -64,6 +66,18 @@ fn get_offset(index: u32) -> u32 {
     let height = (index + 1).ilog2();
     let full = (1u32 << height) - 1;
     index - full
+}
+
+pub fn get_node_type(index: u32, height: usize) -> NodeType {
+    assert!(height < 32);
+    let height = height as u32;
+    if index >= (2_u32.pow(height + 1) - 1) {
+        NodeType::NodeInvalid
+    } else if index >= (2_u32.pow(height) - 1) {
+        NodeType::NodeLeaf
+    } else {
+        NodeType::NodeNonLeaf
+    }
 }
 
 pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {

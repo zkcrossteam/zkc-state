@@ -1,3 +1,7 @@
+use crate::merkle::get_node_type;
+use crate::proto::node::NodeData;
+use crate::proto::{Node, NodeChildren, NodeType};
+
 use super::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleTree};
 use super::poseidon::gen_hasher;
 use ff::PrimeField;
@@ -11,6 +15,51 @@ use serde::{
     de::{Error, Unexpected},
     Deserialize, Deserializer, Serialize, Serializer,
 };
+use tonic::Status;
+
+pub const MERKLE_TREE_HEIGHT: usize = 20;
+
+#[derive(Copy, Debug, Clone, Eq, PartialEq)]
+pub struct ContractId(pub [u8; 32]);
+
+// TODO: Maybe use something like protovalidate to automatically validate fields.
+impl TryFrom<&[u8]> for ContractId {
+    type Error = Status;
+
+    fn try_from(a: &[u8]) -> Result<ContractId, Self::Error> {
+        a.try_into()
+            .map_err(|_e| {
+                Status::invalid_argument(format!("Contract Id malformed (must be [u8; 32])"))
+            })
+            .map(|id| ContractId(id))
+    }
+}
+
+impl From<ContractId> for Vec<u8> {
+    fn from(id: ContractId) -> Self {
+        id.0.into()
+    }
+}
+
+#[derive(Copy, Debug, Clone, Eq, PartialEq)]
+pub struct Hash(pub [u8; 32]);
+
+// TODO: Maybe use something like protovalidate to automatically validate fields.
+impl TryFrom<&[u8]> for Hash {
+    type Error = Status;
+
+    fn try_from(a: &[u8]) -> Result<Hash, Self::Error> {
+        a.try_into()
+            .map_err(|_e| Status::invalid_argument(format!("Hash malformed (must be [u8; 32])")))
+            .map(|hash| Hash(hash))
+    }
+}
+
+impl From<Hash> for Vec<u8> {
+    fn from(hash: Hash) -> Self {
+        hash.0.into()
+    }
+}
 
 pub const MONGODB_URI: &str = "mongodb://localhost:27017";
 
@@ -36,7 +85,7 @@ where
     binary.serialize(serializer)
 }
 
-fn bytes_to_bson(x: &[u8; 32]) -> Bson {
+pub fn bytes_to_bson(x: &[u8; 32]) -> Bson {
     Bson::Binary(mongodb::bson::Binary {
         subtype: BinarySubtype::Generic,
         bytes: (*x).into(),
@@ -109,21 +158,58 @@ impl MongoMerkle {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct MerkleRecord {
-    index: u32,
+    pub index: u32,
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
     #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
-    hash: [u8; 32],
+    pub hash: [u8; 32],
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
     #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
-    left: [u8; 32],
+    pub left: [u8; 32],
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
     #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
-    right: [u8; 32],
+    pub right: [u8; 32],
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
     #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
-    data: [u8; 32],
+    pub data: [u8; 32],
+}
+
+impl TryFrom<MerkleRecord> for Node {
+    type Error = Status;
+
+    fn try_from(record: MerkleRecord) -> Result<Self, Self::Error> {
+        let index = record.index();
+        let hash = record.hash().into();
+        let node_type = get_node_type(index, MERKLE_TREE_HEIGHT);
+        if node_type != NodeType::NodeLeaf && node_type != NodeType::NodeNonLeaf {
+            return Err(Status::internal(
+                "Invalid node (must be leaf or nonleaf node)",
+            ));
+        }
+        let node_data = if node_type == NodeType::NodeLeaf {
+            NodeData::Data(record.data.to_vec())
+        } else {
+            let left_child_hash = record
+                .left()
+                .ok_or(Status::internal("Nonleaf node has no children"))?
+                .into();
+            let right_child_hash = record
+                .right()
+                .ok_or(Status::internal("Nonleaf node has no children"))?
+                .into();
+            NodeData::Children(NodeChildren {
+                left_child_hash,
+                right_child_hash,
+            })
+        };
+        Ok(Node {
+            index,
+            hash,
+            node_type: node_type.into(),
+            node_data: Some(node_data),
+        })
+    }
 }
 
 impl MerkleNode<[u8; 32]> for MerkleRecord {
@@ -180,7 +266,7 @@ impl MerkleRecord {
 
 impl MongoMerkle {
     pub fn height() -> usize {
-        20
+        MERKLE_TREE_HEIGHT
     }
     fn empty_leaf(index: u32) -> MerkleRecord {
         let mut leaf = MerkleRecord::new(index);
