@@ -15,5 +15,7 @@ services:
   kvpair:
     build:
       context: .
+    ports:
+      - 50051:50051
     environment:
       - DATABASE_URI=postgres://postgres:postgres@users-database:5432/users

@@ -85,4 +85,4 @@ static_resources:
                   address:
                     socket_address:
                       address: kvpair
-                      port_value: 50000
+                      port_value: 50051
