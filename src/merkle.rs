@@ -84,7 +84,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
     fn update_root_hash(&mut self, hash: &H);
 
     fn boundary_check(&self, index: u32) -> Result<(), MerkleError> {
-        if index as u32 >= (2_u32.pow(D as u32 + 1) - 1) {
+        if index >= (2_u32.pow(D as u32 + 1) - 1) {
             Err(MerkleError::new(
                 [0; 32],
                 index,
@@ -107,9 +107,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
      * first = 2^k-1, last = 2^{k+1}-2
      */
     fn leaf_check(&self, index: u32) -> Result<(), MerkleError> {
-        if (index as u32) >= (2_u32.pow(D as u32) - 1)
-            && (index as u32) < (2_u32.pow((D as u32) + 1) - 1)
-        {
+        if index >= (2_u32.pow(D as u32) - 1) && index < (2_u32.pow((D as u32) + 1) - 1) {
             Ok(())
         } else {
             Err(MerkleError::new(
@@ -149,9 +147,9 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
             // Calculate the index of current node
             let i = full + p;
             path.insert(0, i);
-            height = height - 1;
+            height -= 1;
             // Caculate the offset of parent
-            p = p / 2;
+            p /= 2;
         }
         assert!(p == 0);
         Ok(path.try_into().unwrap())
@@ -212,7 +210,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
                 (&cur_hash, &proof.assist[depth])
             };
             hash = Self::hash(left, right);
-            p = p / 2;
+            p /= 2;
             let index = p + (1 << depth) - 1;
             self.set_parent(index, &hash, left, right)?;
         }
@@ -236,7 +234,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
         let mut p = get_offset(proof.index);
         let hash = proof.assist.to_vec().iter().fold(init, |acc, x| {
             let (left, right) = if p % 2 == 1 { (x, &acc) } else { (&acc, x) };
-            p = p / 2;
+            p /= 2;
             Self::hash(left, right)
         });
         Ok(proof.root == hash)
@@ -258,7 +256,7 @@ mod tests {
                 for j in start..start + (1 << i) {
                     ns.push(self.data[j])
                 }
-                start = start + (1 << i);
+                start += 1 << i;
                 println!("dbg: {:?}", ns)
             }
         }
@@ -293,15 +291,13 @@ mod tests {
         type Root = String;
         type Node = MerkleU64Node;
         fn construct(_addr: Self::Id, _id: Self::Root) -> Self {
-            MerkleAsArray {
-                data: [0 as u64; 127],
-            }
+            MerkleAsArray { data: [0_u64; 127] }
         }
         fn hash(a: &u64, b: &u64) -> u64 {
             a + b
         }
         fn get_root_hash(&self) -> u64 {
-            return self.data[0];
+            self.data[0]
         }
         fn update_root_hash(&mut self, _h: &u64) {}
 
@@ -341,7 +337,7 @@ mod tests {
         /* one update of 1 is 1 */
         let root = mt.get_root_hash();
         mt.debug();
-        assert_eq!(root, 1 as u64);
+        assert_eq!(root, 1_u64);
 
         let (mut leaf, _) = mt.get_leaf_with_proof(2_u32.pow(6) + 2).unwrap();
         leaf.value = 2;
@@ -350,13 +346,13 @@ mod tests {
         /* two leaves hash needs to be 3 */
         let root = mt.get_root_hash();
         mt.debug();
-        assert_eq!(root, 3 as u64);
+        assert_eq!(root, 3_u64);
 
         let (mut leaf, _) = mt.get_leaf_with_proof(2_u32.pow(6) + 4).unwrap();
         leaf.value = 3;
         let _proof = mt.set_leaf_with_proof(&leaf).unwrap();
         /* two leaves hash needs to be 3 */
         let root = mt.get_root_hash();
-        assert_eq!(root, 6 as u64);
+        assert_eq!(root, 6_u64);
     }
 }

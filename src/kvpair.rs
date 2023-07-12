@@ -3,7 +3,7 @@ use super::poseidon::gen_hasher;
 use ff::PrimeField;
 use futures::executor;
 use halo2_proofs::pairing::bn256::Fr;
-use lazy_static;
+
 use mongodb::bson::{spec::BinarySubtype, Bson};
 use mongodb::options::DropCollectionOptions;
 use mongodb::{bson::doc, Client};
@@ -59,10 +59,7 @@ pub async fn get_collection<T>(
     Ok(database.collection::<T>(name.as_str()))
 }
 
-pub async fn drop_collection<T>(
-    database: String,
-    name: String,
-) -> Result<(), mongodb::error::Error> {
+pub async fn drop_collection(database: String, name: String) -> Result<(), mongodb::error::Error> {
     let collection = get_collection::<MerkleRecord>(database, name).await?;
     let options = DropCollectionOptions::builder().build();
     collection.drop(options).await
@@ -70,10 +67,10 @@ pub async fn drop_collection<T>(
 
 impl MongoMerkle {
     fn get_collection_name(&self) -> String {
-        format!("MERKLEDATA_{}", hex::encode(&self.contract_address))
+        format!("MERKLEDATA_{}", hex::encode(self.contract_address))
     }
     fn get_db_name() -> String {
-        return "zkwasmkvpair".to_string();
+        "zkwasmkvpair".to_string()
     }
 
     pub async fn get_record(
@@ -141,7 +138,6 @@ impl MerkleNode<[u8; 32]> for MerkleRecord {
         self.data = data.clone().try_into().unwrap();
         let batchdata = data
             .chunks(16)
-            .into_iter()
             .map(|x| {
                 let mut v = x.clone().to_vec();
                 v.extend_from_slice(&[0u8; 16]);
@@ -184,7 +180,7 @@ impl MerkleRecord {
 
 impl MongoMerkle {
     pub fn height() -> usize {
-        return 20;
+        20
     }
     fn empty_leaf(index: u32) -> MerkleRecord {
         let mut leaf = MerkleRecord::new(index);
@@ -238,7 +234,7 @@ impl MerkleTree<[u8; 32], 20> for MongoMerkle {
     }
 
     fn update_root_hash(&mut self, hash: &[u8; 32]) {
-        self.root_hash = hash.clone();
+        self.root_hash = *hash;
     }
 
     fn hash(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
@@ -309,7 +305,7 @@ impl MerkleTree<[u8; 32], 20> for MongoMerkle {
 
 #[cfg(test)]
 mod tests {
-    use super::{MerkleRecord, MongoMerkle, DEFAULT_HASH_VEC};
+    use super::{MongoMerkle, DEFAULT_HASH_VEC};
     use crate::{
         kvpair::drop_collection,
         merkle::{MerkleNode, MerkleTree},
@@ -385,7 +381,6 @@ mod tests {
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
-            .into_iter()
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
         /* */
@@ -400,7 +395,6 @@ mod tests {
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
-            .into_iter()
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
         assert_eq!(root, ROOT_HASH_AFTER_LEAF1);
@@ -414,7 +408,6 @@ mod tests {
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
-            .into_iter()
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
         assert_eq!(root, ROOT_HASH_AFTER_LEAF2);
@@ -492,7 +485,6 @@ mod tests {
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
-            .into_iter()
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
         assert_eq!(root, DEFAULT_ROOT_HASH);
@@ -506,7 +498,6 @@ mod tests {
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
-            .into_iter()
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
         assert_eq!(root, ROOT_HASH_AFTER_LEAF1);
@@ -607,7 +598,6 @@ mod tests {
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
-            .into_iter()
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
 
@@ -622,7 +612,6 @@ mod tests {
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
-            .into_iter()
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
 
@@ -642,7 +631,6 @@ mod tests {
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
-            .into_iter()
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
 
@@ -661,7 +649,6 @@ mod tests {
         let root = mt.get_root_hash();
         let root64 = root
             .chunks(8)
-            .into_iter()
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
 
@@ -692,7 +679,7 @@ mod tests {
         let (mut leaf, _) = mt.get_leaf_with_proof(2_u32.pow(20) - 1).unwrap();
         leaf.set(&[1u8; 32].to_vec());
         mt.set_leaf_with_proof(&leaf).unwrap();
-        let root = mt.get_root_hash();
+        let _root = mt.get_root_hash();
 
         // get {
         //     current_root: 4*64 --> bn254    // fr 2^256-C
@@ -708,5 +695,3 @@ mod tests {
         // TODO
     }
 }
-
-
