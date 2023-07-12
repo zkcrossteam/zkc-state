@@ -403,13 +403,7 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
         right: &Hash,
     ) -> Result<(), MerkleError> {
         self.boundary_check(index)?;
-        let record = MerkleRecord {
-            index,
-            data: [0; 32].into(),
-            left: *left,
-            right: *right,
-            hash: *hash,
-        };
+        let record = MerkleRecord::new_non_leaf(index, *hash, *left, *right);
         //println!("set_node_with_hash {} {:?}", index, hash);
         executor::block_on(self.collection.insert_merkle_record(&record))
             .expect("Unexpected DB Error");
@@ -417,35 +411,9 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
     }
 
     fn get_node_with_hash(&mut self, index: u32, hash: &Hash) -> Result<Self::Node, MerkleError> {
-        let v = executor::block_on(self.collection.get_merkle_record(index, hash))
+        let v = executor::block_on(self.collection.must_get_merkle_record(index, hash))
             .expect("Unexpected DB Error");
-        //println!("get_node_with_hash {} {:?} {:?}", index, hash, v);
-        let height = (index + 1).ilog2();
-        v.map_or(
-            {
-                let default = Hash::get_default_hash(height as usize)?;
-                let child_hash = if height == Self::height() as u32 {
-                    [0; 32].into()
-                } else {
-                    Hash::get_default_hash((height + 1) as usize)?
-                };
-                if default == *hash {
-                    Ok(MerkleRecord {
-                        index,
-                        hash: Hash::get_default_hash(height as usize)?,
-                        data: [0; 32].into(),
-                        left: child_hash,
-                        right: child_hash,
-                    })
-                } else {
-                    Err(MerkleError::new(*hash, index, MerkleErrorCode::InvalidHash))
-                }
-            },
-            |x| {
-                assert!(x.index == index);
-                Ok(x)
-            },
-        )
+        Ok(v)
     }
 
     fn set_leaf(&mut self, leaf: &MerkleRecord) -> Result<(), MerkleError> {
