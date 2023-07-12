@@ -220,7 +220,7 @@ impl MongoCollection<MerkleRecord> {
         exists.map_or(
             {
                 let result = self.insert_one(record, None).await?;
-                dbg!(&result);
+                dbg!(record, &result);
                 Ok(*record)
             },
             |record| {
@@ -346,6 +346,19 @@ impl MongoKvPair {
         let mongodb_uri: String =
             std::env::var("MONGODB_URI").unwrap_or("mongodb://localhost:27017".to_string());
         let client = Client::with_uri_str(&mongodb_uri).await.unwrap();
+        MongoKvPair::new_with_client(client)
+    }
+
+    pub async fn new_test() -> Self {
+        let mongodb_uri: String =
+            std::env::var("MONGODB_URI").unwrap_or("mongodb://localhost:27017".to_string());
+        let client = Client::with_uri_str(&mongodb_uri).await.unwrap();
+        let db_name = MongoCollection::<MerkleRecord>::get_database_name();
+        let db = client.database(&db_name);
+        let _ = db
+            .drop(None)
+            .await
+            .map_err(|e| println! {"Dropping db {db_name} failed: {e}"});
         MongoKvPair::new_with_client(client)
     }
 

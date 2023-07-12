@@ -66,9 +66,8 @@ message GetNonLeafResponse { Node node = 1; }
 
 message SetLeafRequest {
   uint32 index = 1;
-  bytes hash = 2;
-  bytes leaf_data = 3;
-  ProofType proof_type = 4;
+  bytes leaf_data = 2;
+  ProofType proof_type = 3;
 }
 
 message SetLeafResponse {
