@@ -127,6 +127,23 @@ impl Hash {
         hasher.squeeze().to_repr().into()
     }
 
+    pub fn hash_data(data: &LeafData) -> Self {
+        let data: [u8; 32] = data.0;
+        let batchdata = data
+            .chunks(16)
+            .map(|x| {
+                let mut v = x.clone().to_vec();
+                v.extend_from_slice(&[0u8; 16]);
+                let f = v.try_into().unwrap();
+                Fr::from_repr(f).unwrap()
+            })
+            .collect::<Vec<Fr>>();
+        let values: [Fr; 2] = batchdata.try_into().unwrap();
+        let mut hasher = gen_hasher();
+        hasher.update(&values);
+        hasher.squeeze().to_repr().into()
+    }
+
     /// depth start from 0 up to Self::height(). Example 20 height MongoMerkle, root depth=0, leaf depth=20
     pub fn get_default_hash(depth: usize) -> Result<Hash, MerkleError> {
         if depth <= MERKLE_TREE_HEIGHT {
@@ -266,21 +283,8 @@ impl MerkleNode<Hash> for MerkleRecord {
         self.hash
     }
     fn set(&mut self, data: &[u8]) {
-        let mut hasher = gen_hasher();
         let data: [u8; 32] = data.clone().try_into().unwrap();
-        self.data = data.into();
-        let batchdata = data
-            .chunks(16)
-            .map(|x| {
-                let mut v = x.clone().to_vec();
-                v.extend_from_slice(&[0u8; 16]);
-                let f = v.try_into().unwrap();
-                Fr::from_repr(f).unwrap()
-            })
-            .collect::<Vec<Fr>>();
-        let values: [Fr; 2] = batchdata.try_into().unwrap();
-        hasher.update(&values);
-        self.hash = hasher.squeeze().to_repr().into();
+        self.hash = Hash::hash_data(&data.into());
     }
     fn right(&self) -> Option<Hash> {
         Some(self.right)
@@ -301,29 +305,19 @@ impl MerkleRecord {
         }
     }
 
-    pub fn new_leaf(index: u32, hash: impl Into<Hash>, data: impl Into<LeafData>) -> Self {
-        MerkleRecord {
-            index,
-            hash: hash.into(),
-            data: data.into(),
-            left: [0; 32].into(),
-            right: [0; 32].into(),
-        }
+    pub fn new_leaf(index: u32, data: impl Into<LeafData>) -> Self {
+        let mut record = MerkleRecord::new(index);
+        record.data = data.into();
+        record.hash = Hash::hash_data(&record.data);
+        record
     }
 
-    pub fn new_non_leaf(
-        index: u32,
-        hash: impl Into<Hash>,
-        left: impl Into<Hash>,
-        right: impl Into<Hash>,
-    ) -> Self {
-        MerkleRecord {
-            index,
-            hash: hash.into(),
-            data: [0; 32].into(),
-            left: left.into(),
-            right: right.into(),
-        }
+    pub fn new_non_leaf(index: u32, left: impl Into<Hash>, right: impl Into<Hash>) -> Self {
+        let mut record = MerkleRecord::new(index);
+        record.left = left.into();
+        record.right = right.into();
+        record.hash = Hash::hash_children(&record.left, &record.right);
+        record
     }
 
     pub fn data_as_u64(&self) -> [u64; 4] {
@@ -403,7 +397,8 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
         right: &Hash,
     ) -> Result<(), MerkleError> {
         self.boundary_check(index)?;
-        let record = MerkleRecord::new_non_leaf(index, *hash, *left, *right);
+        let record = MerkleRecord::new_non_leaf(index, *left, *right);
+        assert_eq!(hash, &record.hash);
         //println!("set_node_with_hash {} {:?}", index, hash);
         executor::block_on(self.collection.insert_merkle_record(&record))
             .expect("Unexpected DB Error");

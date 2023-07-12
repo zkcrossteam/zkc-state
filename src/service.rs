@@ -233,21 +233,19 @@ impl MongoCollection<MerkleRecord> {
     pub async fn insert_leaf_node(
         &mut self,
         index: u32,
-        hash: &Hash,
         data: &LeafData,
     ) -> Result<MerkleRecord, Error> {
-        let record = MerkleRecord::new_leaf(index, *hash, *data);
+        let record = MerkleRecord::new_leaf(index, *data);
         self.insert_merkle_record(&record).await
     }
 
     pub async fn insert_non_leaf_node(
         &mut self,
         index: u32,
-        hash: Hash,
         left: Hash,
         right: Hash,
     ) -> Result<MerkleRecord, Error> {
-        let record = MerkleRecord::new_non_leaf(index, hash, left, right);
+        let record = MerkleRecord::new_non_leaf(index, left, right);
         self.insert_merkle_record(&record).await
     }
 
@@ -332,7 +330,8 @@ impl MongoCollection<MerkleRecord> {
             hash = Hash::hash_children(&left, &right);
             p /= 2;
             let index = p + (1 << depth) - 1;
-            let record = MerkleRecord::new_non_leaf(index, hash, left, right);
+            let record = MerkleRecord::new_non_leaf(index, left, right);
+            assert_eq!(record.hash, hash);
             self.insert_merkle_record(&record).await?;
             if index == 0 {
                 self.update_root_merkle_record(&record).await?;
@@ -457,9 +456,8 @@ impl KvPair for MongoKvPair {
         // TODO: Should use session here
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
-        let hash: Hash = request.hash.as_slice().try_into()?;
         let leaf_data: LeafData = request.leaf_data.as_slice().try_into()?;
-        let record = MerkleRecord::new_leaf(index, hash, leaf_data);
+        let record = MerkleRecord::new_leaf(index, leaf_data);
         let proof = collection.set_leaf_and_get_proof(&record).await?;
         let proof = if request.proof_type == ProofType::ProofV0 as i32 {
             Some(Proof {
