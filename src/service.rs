@@ -7,9 +7,10 @@ use super::kvpair::{bytes_to_bson, ContractId, Hash, MerkleRecord};
 use mongodb::bson::{doc, Document};
 use mongodb::error::{TRANSIENT_TRANSACTION_ERROR, UNKNOWN_TRANSACTION_COMMIT_RESULT};
 use mongodb::options::{
-    Acknowledgment, FindOneOptions, InsertOneOptions, ReadConcern, TransactionOptions, WriteConcern,
+    Acknowledgment, FindOneOptions, InsertOneOptions, ReadConcern, ReplaceOptions,
+    TransactionOptions, WriteConcern,
 };
-use mongodb::results::InsertOneResult;
+use mongodb::results::{InsertOneResult, UpdateResult};
 use mongodb::{Client, ClientSession, Collection};
 use tonic::{Request, Response, Status};
 
@@ -122,6 +123,27 @@ impl MongoCollection<MerkleRecord> {
         Ok(result)
     }
 
+    pub async fn replace_one(
+        &mut self,
+        query: Document,
+        replacement: impl Borrow<MerkleRecord>,
+        options: impl Into<Option<ReplaceOptions>>,
+    ) -> Result<UpdateResult, mongodb::error::Error> {
+        let result = match self.session.as_mut() {
+            Some(session) => {
+                self.collection
+                    .replace_one_with_session(query, replacement, options, session)
+                    .await?
+            }
+            _ => {
+                self.collection
+                    .replace_one(query, replacement, options)
+                    .await?
+            }
+        };
+        Ok(result)
+    }
+
     pub async fn get_merkle_record(
         &mut self,
         index: u32,
@@ -156,8 +178,7 @@ impl MongoCollection<MerkleRecord> {
         record.ok_or(Error::Precondition("Merkle record not found".to_string()))
     }
 
-    /* We always insert new record as there might be uncommitted update to the merkle tree */
-    pub async fn update_merkle_record(
+    pub async fn insert_merkle_record(
         &mut self,
         record: &MerkleRecord,
     ) -> Result<MerkleRecord, Error> {
@@ -182,7 +203,11 @@ impl MongoCollection<MerkleRecord> {
         record: &MerkleRecord,
     ) -> Result<MerkleRecord, Error> {
         assert_eq!(record.hash, Hash::default().0);
-        self.update_merkle_record(record).await
+        let mut filter = doc! {};
+        filter.insert("hash", bytes_to_bson(&record.hash));
+        let result = self.replace_one(filter, record, None).await?;
+        dbg!(&result);
+        Ok(*record)
     }
 }
 
