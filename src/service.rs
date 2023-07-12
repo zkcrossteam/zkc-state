@@ -177,7 +177,7 @@ impl MongoCollection<MerkleRecord> {
     ) -> Result<Option<MerkleRecord>, Error> {
         let mut filter = doc! {};
         filter.insert("index", index);
-        filter.insert("hash", hash_to_bson(&hash));
+        filter.insert("hash", hash_to_bson(hash));
         let record = self.find_one(filter, None).await?;
         if record.is_some() {
             return Ok(record);
@@ -236,10 +236,7 @@ impl MongoCollection<MerkleRecord> {
         hash: &Hash,
         data: &LeafData,
     ) -> Result<MerkleRecord, Error> {
-        let mut record = MerkleRecord::default();
-        record.index = index;
-        record.hash = *hash;
-        record.data = *data;
+        let record = MerkleRecord::new_leaf(index, *hash, *data);
         self.insert_merkle_record(&record).await
     }
 
@@ -250,11 +247,7 @@ impl MongoCollection<MerkleRecord> {
         left: Hash,
         right: Hash,
     ) -> Result<MerkleRecord, Error> {
-        let mut record = MerkleRecord::default();
-        record.index = index;
-        record.hash = hash;
-        record.left = left;
-        record.right = right;
+        let record = MerkleRecord::new_non_leaf(index, hash, left, right);
         self.insert_merkle_record(&record).await
     }
 
@@ -265,10 +258,10 @@ impl MongoCollection<MerkleRecord> {
         let filter = doc! {"_id": Self::get_current_root_object_id()};
         let update = doc! {
             "$set": {
-                "hash": to_bson(&Hash::from(record.hash)).unwrap(),
-                "left": to_bson(&Hash::from(record.left)).unwrap(),
-                "right": to_bson(&Hash::from(record.right)).unwrap(),
-                "data": to_bson(&LeafData::from(record.data)).unwrap(),
+                "hash": to_bson(&record.hash).unwrap(),
+                "left": to_bson(&record.left).unwrap(),
+                "right": to_bson(&record.right).unwrap(),
+                "data": to_bson(&record.data).unwrap(),
             },
             // We use this to track the number of root updates.
             "$inc": {
@@ -301,20 +294,18 @@ impl MongoCollection<MerkleRecord> {
                 (acc_node.right().unwrap(), acc_node.left().unwrap())
             };
             let sibling = get_sibling_index(child);
-            let sibling_node = self
-                .must_get_merkle_record(sibling, &sibling_hash.into())
-                .await?;
+            let sibling_node = self.must_get_merkle_record(sibling, &sibling_hash).await?;
             acc = child;
-            acc_node = self.must_get_merkle_record(acc, &hash.into()).await?;
-            assist.push(Hash::from(sibling_node.hash()));
+            acc_node = self.must_get_merkle_record(acc, &hash).await?;
+            assist.push(sibling_node.hash());
         }
         let hash = acc_node.hash();
         Ok((
             acc_node,
             MerkleProof {
-                source: hash.into(),
-                root: root_hash.into(),
-                assist: assist.try_into().unwrap(),
+                source: hash,
+                root: root_hash,
+                assist,
                 index,
             },
         ))
@@ -327,7 +318,7 @@ impl MongoCollection<MerkleRecord> {
         let index = leaf.index();
         let mut hash = leaf.hash();
         let (_, mut proof) = self.get_leaf_and_proof(index).await?;
-        proof.source = hash.clone().into();
+        proof.source = hash;
         let mut p = get_offset(index);
         self.insert_merkle_record(leaf).await?;
         for i in 0..MERKLE_TREE_HEIGHT {
@@ -341,11 +332,7 @@ impl MongoCollection<MerkleRecord> {
             hash = Hash::hash_children(&left, &right);
             p /= 2;
             let index = p + (1 << depth) - 1;
-            let mut record = MerkleRecord::default();
-            record.index = index;
-            record.hash = hash;
-            record.left = left;
-            record.right = right;
+            let record = MerkleRecord::new_non_leaf(index, hash, left, right);
             self.insert_merkle_record(&record).await?;
             if index == 0 {
                 self.update_root_merkle_record(&record).await?;

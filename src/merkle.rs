@@ -149,7 +149,7 @@ impl Error for MerkleError {}
 pub trait MerkleNode<H: Debug + Clone + PartialEq> {
     fn hash(&self) -> H;
     fn index(&self) -> u32;
-    fn set(&mut self, data: &Vec<u8>);
+    fn set(&mut self, data: &[u8]);
     fn left(&self) -> Option<H>; // hash of left child
     fn right(&self) -> Option<H>; // hash of right child
 }
@@ -237,7 +237,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq + Serialize, const D: usize> {
             MerkleProof {
                 source: hash,
                 root: self.get_root_hash(),
-                assist: assist.try_into().unwrap(),
+                assist,
                 index,
             },
         ))
@@ -271,7 +271,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq + Serialize, const D: usize> {
     fn update_leaf_data_with_proof(
         &mut self,
         index: u32,
-        data: &Vec<u8>,
+        data: &[u8],
     ) -> Result<MerkleProof<H, D>, MerkleError> {
         let (mut leaf, _) = self.get_leaf_with_proof(index)?;
         leaf.set(data);
@@ -323,7 +323,7 @@ mod tests {
         fn hash(&self) -> u64 {
             self.value
         }
-        fn set(&mut self, value: &Vec<u8>) {
+        fn set(&mut self, value: &[u8]) {
             let v: [u8; 8] = value.clone().try_into().unwrap();
             self.value = u64::from_le_bytes(v);
         }

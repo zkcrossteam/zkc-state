@@ -1,7 +1,7 @@
 pub mod errors;
-mod kvpair;
-mod merkle;
-mod poseidon;
+pub mod kvpair;
+pub mod merkle;
+pub mod poseidon;
 pub mod service;
 
 pub mod proto {

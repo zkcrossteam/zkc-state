@@ -49,9 +49,9 @@ impl TryFrom<&[u8]> for ContractId {
     fn try_from(a: &[u8]) -> Result<ContractId, Self::Error> {
         a.try_into()
             .map_err(|_e| {
-                Error::InvalidArgument(format!("Contract Id malformed (must be [u8; 32])"))
+                Error::InvalidArgument("Contract Id malformed (must be [u8; 32])".to_string())
             })
-            .map(|id| ContractId(id))
+            .map(ContractId)
     }
 }
 
@@ -93,8 +93,8 @@ impl TryFrom<&[u8]> for Hash {
 
     fn try_from(a: &[u8]) -> Result<Hash, Self::Error> {
         a.try_into()
-            .map_err(|_e| Error::InvalidArgument(format!("Hash malformed (must be [u8; 32])")))
-            .map(|hash| Hash(hash))
+            .map_err(|_e| Error::InvalidArgument("Hash malformed (must be [u8; 32])".to_string()))
+            .map(Hash)
     }
 }
 
@@ -154,8 +154,10 @@ impl TryFrom<&[u8]> for LeafData {
 
     fn try_from(a: &[u8]) -> Result<LeafData, Self::Error> {
         a.try_into()
-            .map_err(|_e| Error::InvalidArgument(format!("LeafData malformed (must be [u8; 32])")))
-            .map(|value| LeafData(value))
+            .map_err(|_e| {
+                Error::InvalidArgument("LeafData malformed (must be [u8; 32])".to_string())
+            })
+            .map(LeafData)
     }
 }
 
@@ -263,7 +265,7 @@ impl MerkleNode<Hash> for MerkleRecord {
     fn hash(&self) -> Hash {
         self.hash
     }
-    fn set(&mut self, data: &Vec<u8>) {
+    fn set(&mut self, data: &[u8]) {
         let mut hasher = gen_hasher();
         let data: [u8; 32] = data.clone().try_into().unwrap();
         self.data = data.into();
@@ -335,11 +337,11 @@ impl MerkleRecord {
 
     pub fn get_default_record(index: u32) -> Result<Self, MerkleError> {
         let height = (index + 1).ilog2() as usize;
-        let default = Hash::get_default_hash((height) as usize)?;
+        let default = Hash::get_default_hash(height)?;
         let child_hash = if height == MERKLE_TREE_HEIGHT {
             [0; 32].into()
         } else {
-            Hash::get_default_hash((height + 1) as usize)?
+            Hash::get_default_hash(height + 1)?
         };
         Ok(MerkleRecord {
             index,
@@ -357,10 +359,10 @@ impl MongoMerkle {
     }
     fn empty_leaf(index: u32) -> MerkleRecord {
         let mut leaf = MerkleRecord::new(index);
-        leaf.set(&[0; 32].to_vec());
+        leaf.set([0; 32].as_ref());
         leaf
     }
-    async fn must_drop_collection(&mut self) {
+    pub async fn must_drop_collection(&mut self) {
         self.collection.drop().await.unwrap();
     }
 }
@@ -538,7 +540,7 @@ mod tests {
 
         // 2
         let (mut leaf1, _) = mt.get_leaf_with_proof(INDEX1).unwrap();
-        leaf1.set(&LEAF1_DATA.to_vec());
+        leaf1.set(LEAF1_DATA.as_ref());
         mt.set_leaf_with_proof(&leaf1).unwrap();
 
         let root = mt.get_root_hash();
@@ -552,7 +554,7 @@ mod tests {
 
         // 3
         let (mut leaf2, _) = mt.get_leaf_with_proof(INDEX2).unwrap();
-        leaf2.set(&LEAF2_DATA.to_vec());
+        leaf2.set(LEAF2_DATA.as_ref());
         mt.set_leaf_with_proof(&leaf2).unwrap();
 
         let root = mt.get_root_hash();
@@ -641,7 +643,7 @@ mod tests {
 
         // 2
         let (mut leaf, _) = mt.get_leaf_with_proof(INDEX1).unwrap();
-        leaf.set(&LEAF1_DATA.to_vec());
+        leaf.set(LEAF1_DATA.as_ref());
         mt.set_leaf_with_proof(&leaf).unwrap();
 
         let root = mt.get_root_hash();
@@ -754,7 +756,7 @@ mod tests {
 
         // 2
         let (mut leaf, _) = mt.get_leaf_with_proof(INDEX1).unwrap();
-        leaf.set(&LEAF1_DATA.to_vec());
+        leaf.set(LEAF1_DATA.as_ref());
         mt.set_leaf_with_proof(&leaf).unwrap();
 
         let root = mt.get_root_hash();
@@ -774,7 +776,7 @@ mod tests {
 
         // 3
         let (mut leaf, _) = mt.get_leaf_with_proof(INDEX2).unwrap();
-        leaf.set(&LEAF2_DATA.to_vec());
+        leaf.set(LEAF2_DATA.as_ref());
         mt.set_leaf_with_proof(&leaf).unwrap();
 
         let root = mt.get_root_hash();
@@ -793,7 +795,7 @@ mod tests {
 
         // 4
         let (mut leaf, _) = mt.get_leaf_with_proof(INDEX3).unwrap();
-        leaf.set(&LEAF3_DATA.to_vec());
+        leaf.set(LEAF3_DATA.as_ref());
         mt.set_leaf_with_proof(&leaf).unwrap();
 
         let root = mt.get_root_hash();
@@ -829,7 +831,7 @@ mod tests {
         let mut mt =
             MongoMerkle::construct([0; 32].into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
         let (mut leaf, _) = mt.get_leaf_with_proof(2_u32.pow(20) - 1).unwrap();
-        leaf.set(&[1u8; 32].to_vec());
+        leaf.set([1u8; 32].as_ref());
         mt.set_leaf_with_proof(&leaf).unwrap();
         let _root = mt.get_root_hash();
 
@@ -847,5 +849,3 @@ mod tests {
         // TODO
     }
 }
-
-
