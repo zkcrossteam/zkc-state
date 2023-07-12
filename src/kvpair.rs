@@ -19,6 +19,21 @@ use serde::{
 
 pub const MERKLE_TREE_HEIGHT: usize = 20;
 
+// In default_hash vec, it is from leaf to root.
+// For example, height of merkle tree is 20.
+// DEFAULT_HASH_VEC[0] leaf's default hash. DEFAULT_HASH_VEC[20] is root default hash. It has 21 layers including the leaf layer and root layer.
+lazy_static::lazy_static! {
+    pub static ref DEFAULT_HASH_VEC: [Hash; MERKLE_TREE_HEIGHT + 1] = {
+        let mut leaf_hash = MongoMerkle::empty_leaf(0).hash();
+        let mut default_hash = vec![leaf_hash];
+        for _ in 0..MERKLE_TREE_HEIGHT {
+            leaf_hash = Hash::hash_children(&leaf_hash, &leaf_hash);
+            default_hash.push(leaf_hash);
+        }
+        default_hash.try_into().unwrap()
+    };
+}
+
 #[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct ContractId(
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
@@ -97,6 +112,19 @@ impl Hash {
         hasher.update(&[a, b]);
         hasher.squeeze().to_repr().into()
     }
+
+    /// depth start from 0 up to Self::height(). Example 20 height MongoMerkle, root depth=0, leaf depth=20
+    pub fn get_default_hash(depth: usize) -> Result<Hash, MerkleError> {
+        if depth <= MERKLE_TREE_HEIGHT {
+            Ok(DEFAULT_HASH_VEC[MERKLE_TREE_HEIGHT - depth])
+        } else {
+            Err(MerkleError::new(
+                [0; 32].into(),
+                depth as u32,
+                MerkleErrorCode::InvalidDepth,
+            ))
+        }
+    }
 }
 
 #[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
@@ -161,7 +189,6 @@ pub fn hash_to_bson(x: &Hash) -> Bson {
 #[derive(Debug)]
 pub struct MongoMerkle {
     root_hash: Hash,
-    default_hash: Vec<Hash>,
     collection: MongoCollection<MerkleRecord>,
 }
 
@@ -291,6 +318,23 @@ impl MerkleRecord {
             u64::from_le_bytes(self.data.0[24..32].try_into().unwrap()),
         ]
     }
+
+    pub fn get_default_record(index: u32) -> Result<Self, MerkleError> {
+        let height = (index + 1).ilog2() as usize;
+        let default = Hash::get_default_hash((height) as usize)?;
+        let child_hash = if height == MERKLE_TREE_HEIGHT {
+            [0; 32].into()
+        } else {
+            Hash::get_default_hash((height + 1) as usize)?
+        };
+        Ok(MerkleRecord {
+            index,
+            hash: default,
+            data: [0; 32].into(),
+            left: child_hash,
+            right: child_hash,
+        })
+    }
 }
 
 impl MongoMerkle {
@@ -302,37 +346,9 @@ impl MongoMerkle {
         leaf.set(&[0; 32].to_vec());
         leaf
     }
-    /// depth start from 0 up to Self::height(). Example 20 height MongoMerkle, root depth=0, leaf depth=20
-    fn get_default_hash(&self, depth: usize) -> Result<Hash, MerkleError> {
-        if depth <= Self::height() {
-            Ok(self.default_hash[Self::height() - depth])
-        } else {
-            Err(MerkleError::new(
-                [0; 32].into(),
-                depth as u32,
-                MerkleErrorCode::InvalidDepth,
-            ))
-        }
-    }
-
     async fn must_drop_collection(&mut self) {
         self.collection.drop().await.unwrap();
     }
-}
-
-// In default_hash vec, it is from leaf to root.
-// For example, height of merkle tree is 20.
-// DEFAULT_HASH_VEC[0] leaf's default hash. DEFAULT_HASH_VEC[20] is root default hash. It has 21 layers including the leaf layer and root layer.
-lazy_static::lazy_static! {
-    static ref DEFAULT_HASH_VEC: Vec<Hash> = {
-        let mut leaf_hash = MongoMerkle::empty_leaf(0).hash;
-        let mut default_hash = vec![leaf_hash];
-        for _ in 0..(MongoMerkle::height()) {
-            leaf_hash = Hash::hash_children(&leaf_hash, &leaf_hash);
-            default_hash.push(leaf_hash);
-        }
-        default_hash
-    };
 }
 
 impl MerkleTree<Hash, 20> for MongoMerkle {
@@ -350,7 +366,6 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
 
         MongoMerkle {
             root_hash: root,
-            default_hash: (*DEFAULT_HASH_VEC).clone(),
             collection,
         }
     }
@@ -395,16 +410,16 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
         let height = (index + 1).ilog2();
         v.map_or(
             {
-                let default = self.get_default_hash(height as usize)?;
+                let default = Hash::get_default_hash(height as usize)?;
                 let child_hash = if height == Self::height() as u32 {
                     [0; 32].into()
                 } else {
-                    self.get_default_hash((height + 1) as usize)?
+                    Hash::get_default_hash((height + 1) as usize)?
                 };
                 if default == *hash {
                     Ok(MerkleRecord {
                         index,
-                        hash: self.get_default_hash(height as usize)?,
+                        hash: Hash::get_default_hash(height as usize)?,
                         data: [0; 32].into(),
                         left: child_hash,
                         right: child_hash,

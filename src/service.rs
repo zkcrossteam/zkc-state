@@ -177,7 +177,10 @@ impl MongoCollection<MerkleRecord> {
         filter.insert("index", index);
         filter.insert("hash", hash_to_bson(&hash));
         let record = self.find_one(filter, None).await?;
-        Ok(record)
+        if record.is_some() {
+            return Ok(record);
+        }
+        Ok(MerkleRecord::get_default_record(index).ok())
     }
 
     pub async fn must_get_merkle_record(
@@ -192,7 +195,10 @@ impl MongoCollection<MerkleRecord> {
     pub async fn get_root_merkle_record(&mut self) -> Result<Option<MerkleRecord>, Error> {
         let filter = doc! {"_id": Self::get_current_root_object_id()};
         let record = self.find_one(filter, None).await?;
-        Ok(record)
+        if record.is_some() {
+            return Ok(record);
+        }
+        Ok(MerkleRecord::get_default_record(0).ok())
     }
 
     pub async fn must_get_root_merkle_record(&mut self) -> Result<MerkleRecord, Error> {
