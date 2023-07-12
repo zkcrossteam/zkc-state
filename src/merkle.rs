@@ -1,3 +1,5 @@
+use crate::kvpair::Hash;
+
 use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
@@ -5,11 +7,8 @@ use std::fmt::Debug;
 pub use utils::*;
 
 pub mod utils {
-    use ff::PrimeField;
-    use halo2_proofs::pairing::bn256::Fr;
-
     use super::*;
-    use crate::{poseidon::gen_hasher, proto::NodeType};
+    use crate::proto::NodeType;
 
     pub fn get_offset(index: u32) -> u32 {
         let height = (index + 1).ilog2();
@@ -33,7 +32,7 @@ pub mod utils {
         let node_type = get_node_type(index, height);
         if node_type == NodeType::NodeInvalid {
             Err(MerkleError::new(
-                [0; 32],
+                [0; 32].into(),
                 index,
                 MerkleErrorCode::InvalidIndex,
             ))
@@ -57,7 +56,7 @@ pub mod utils {
         let node_type = get_node_type(index, height);
         if node_type != NodeType::NodeLeaf {
             Err(MerkleError::new(
-                [0; 32],
+                [0; 32].into(),
                 index,
                 MerkleErrorCode::InvalidLeafIndex,
             ))
@@ -102,14 +101,6 @@ pub mod utils {
         assert!(p == 0);
         Ok(path)
     }
-
-    pub fn hash_children(a: &[u8; 32], b: &[u8; 32]) -> [u8; 32] {
-        let mut hasher = gen_hasher();
-        let a = Fr::from_repr(*a).unwrap();
-        let b = Fr::from_repr(*b).unwrap();
-        hasher.update(&[a, b]);
-        hasher.squeeze().to_repr()
-    }
 }
 
 /*
@@ -127,13 +118,13 @@ pub enum MerkleErrorCode {
 
 #[derive(Debug)]
 pub struct MerkleError {
-    source: [u8; 32],
+    source: Hash,
     index: u32,
     code: MerkleErrorCode,
 }
 
 impl MerkleError {
-    pub fn new(source: [u8; 32], index: u32, code: MerkleErrorCode) -> Self {
+    pub fn new(source: Hash, index: u32, code: MerkleErrorCode) -> Self {
         MerkleError {
             source,
             index,
@@ -413,9 +404,3 @@ mod tests {
         assert_eq!(root, 6_u64);
     }
 }
-
-
-
-
-
-
