@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
 
+use serde::{Deserialize, Serialize};
 pub use utils::*;
 
 pub mod utils {
@@ -153,15 +154,15 @@ pub trait MerkleNode<H: Debug + Clone + PartialEq> {
     fn right(&self) -> Option<H>; // hash of right child
 }
 
-#[derive(Debug)]
-pub struct MerkleProof<H: Debug + Clone + PartialEq, const D: usize> {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MerkleProof<H: Debug + Clone + PartialEq + Serialize, const D: usize> {
     pub source: H,
     pub root: H, // last is root
-    pub assist: [H; D],
+    pub assist: Vec<H>,
     pub index: u32,
 }
 
-pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
+pub trait MerkleTree<H: Debug + Clone + PartialEq + Serialize, const D: usize> {
     type Node: MerkleNode<H>;
     type Id;
     type Root;

@@ -35,7 +35,7 @@ enum ProofType {
 // A proof to validate whether some key value pair exists in the KVStore.
 message Proof {
   ProofType proof_type = 1;
-  repeated Node nodes = 2;
+  bytes proof = 2;
 }
 
 message GetRootRequest { bytes contract_id = 1; }

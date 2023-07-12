@@ -248,13 +248,38 @@ impl MerkleNode<Hash> for MerkleRecord {
 }
 
 impl MerkleRecord {
-    fn new(index: u32) -> Self {
+    pub fn new(index: u32) -> Self {
         MerkleRecord {
             index,
             hash: [0; 32].into(),
             data: [0; 32].into(),
             left: [0; 32].into(),
             right: [0; 32].into(),
+        }
+    }
+
+    pub fn new_leaf(index: u32, hash: impl Into<Hash>, data: impl Into<LeafData>) -> Self {
+        MerkleRecord {
+            index,
+            hash: hash.into(),
+            data: data.into(),
+            left: [0; 32].into(),
+            right: [0; 32].into(),
+        }
+    }
+
+    pub fn new_non_leaf(
+        index: u32,
+        hash: impl Into<Hash>,
+        left: impl Into<Hash>,
+        right: impl Into<Hash>,
+    ) -> Self {
+        MerkleRecord {
+            index,
+            hash: hash.into(),
+            data: [0; 32].into(),
+            left: left.into(),
+            right: right.into(),
         }
     }
 

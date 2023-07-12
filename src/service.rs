@@ -63,7 +63,7 @@ impl<T> MongoCollection<T> {
     }
 
     pub async fn commit(&mut self) -> Result<(), mongodb::error::Error> {
-        if let Some(session) = self.session.as_mut() {
+        if let Some(mut session) = self.session.take() {
             // A "TransientTransactionError" label indicates that the entire transaction can be retried
             // with a reasonable expectation that it will succeed.
             // An "UnknownTransactionCommitResult" label indicates that it is unknown whether the
@@ -369,9 +369,11 @@ impl KvPair for MongoKvPair {
         dbg!(&request);
         let request = request.into_inner();
         let contract_id: ContractId = request.contract_id.as_slice().try_into()?;
+        let mut collection = self.new_collection(&contract_id, false).await?;
+        let record = collection.must_get_root_merkle_record().await?;
         Ok(Response::new(GetRootResponse {
             contract_id: contract_id.into(),
-            root: [0u8; 32].into(),
+            root: record.hash().into(),
         }))
     }
 
@@ -415,17 +417,24 @@ impl KvPair for MongoKvPair {
         let index = request.index;
         let hash: Hash = request.hash.as_slice().try_into()?;
         let leaf_data: LeafData = request.leaf_data.as_slice().try_into()?;
-        let record = collection.get_merkle_record(index, &hash).await?;
-        let record = match record {
-            Some(record) if record.data == leaf_data => record,
-            _ => todo!(),
+        let record = MerkleRecord::new_leaf(index, hash, leaf_data);
+        use crate::proto::Proof;
+        use crate::proto::ProofType;
+        let proof = collection.set_leaf_and_get_proof(&record).await?;
+        let proof = if request.proof_type == ProofType::ProofV0 as i32 {
+            Some(Proof {
+                proof_type: request.proof_type,
+                proof: bincode::serialize(&proof).unwrap(),
+            })
+        } else {
+            None
         };
         let node = record.try_into()?;
         collection.commit().await.map_err(Error::from)?;
         dbg!(&record, &node);
         Ok(Response::new(GetLeafResponse {
             node: Some(node),
-            proof: None,
+            proof,
         }))
     }
 
