@@ -454,7 +454,7 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
 mod tests {
     use super::{MongoMerkle, DEFAULT_HASH_VEC};
     use crate::{
-        kvpair::{Hash, drop_collection},
+        kvpair::{drop_collection, Hash},
         merkle::{MerkleNode, MerkleTree},
     };
     use futures::executor;
@@ -519,14 +519,16 @@ mod tests {
         const PARENT_INDEX: u32 = 2_u32.pow(19) - 1;
 
         // 1
-        let mut mt = MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+        let mut mt =
+            MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
         executor::block_on(drop_collection(
             MongoMerkle::get_db_name(),
             mt.get_collection_name(),
         ))
         .expect("Unexpected DB Error");
         let root = mt.get_root_hash();
-        let root64 = root.0
+        let root64 = root
+            .0
             .chunks(8)
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
@@ -540,7 +542,8 @@ mod tests {
         mt.set_leaf_with_proof(&leaf1).unwrap();
 
         let root = mt.get_root_hash();
-        let root64 = root.0
+        let root64 = root
+            .0
             .chunks(8)
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
@@ -553,7 +556,8 @@ mod tests {
         mt.set_leaf_with_proof(&leaf2).unwrap();
 
         let root = mt.get_root_hash();
-        let root64 = root.0
+        let root64 = root
+            .0
             .chunks(8)
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
@@ -623,14 +627,16 @@ mod tests {
         ];
 
         // 1
-        let mut mt = MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+        let mut mt =
+            MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
         executor::block_on(drop_collection(
             MongoMerkle::get_db_name(),
             mt.get_collection_name(),
         ))
         .expect("Unexpected DB Error");
         let root = mt.get_root_hash();
-        let root64 = root.0
+        let root64 = root
+            .0
             .chunks(8)
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
@@ -643,7 +649,8 @@ mod tests {
         mt.set_leaf_with_proof(&leaf).unwrap();
 
         let root = mt.get_root_hash();
-        let root64 = root.0
+        let root64 = root
+            .0
             .chunks(8)
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
@@ -736,14 +743,16 @@ mod tests {
         ];
 
         // 1
-        let mut mt = MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+        let mut mt =
+            MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
         executor::block_on(drop_collection(
             MongoMerkle::get_db_name(),
             mt.get_collection_name(),
         ))
         .expect("Unexpected DB Error");
         let root = mt.get_root_hash();
-        let root64 = root.0
+        let root64 = root
+            .0
             .chunks(8)
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
@@ -757,7 +766,8 @@ mod tests {
         mt.set_leaf_with_proof(&leaf).unwrap();
 
         let root = mt.get_root_hash();
-        let root64 = root.0
+        let root64 = root
+            .0
             .chunks(8)
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
@@ -776,7 +786,8 @@ mod tests {
         mt.set_leaf_with_proof(&leaf).unwrap();
 
         let root = mt.get_root_hash();
-        let root64 = root.0
+        let root64 = root
+            .0
             .chunks(8)
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
@@ -794,7 +805,8 @@ mod tests {
         mt.set_leaf_with_proof(&leaf).unwrap();
 
         let root = mt.get_root_hash();
-        let root64 = root.0
+        let root64 = root
+            .0
             .chunks(8)
             .map(|x| u64::from_le_bytes(x.to_vec().try_into().unwrap()))
             .collect::<Vec<u64>>();
@@ -822,7 +834,8 @@ mod tests {
 
     #[test]
     fn test_generate_kv_input() {
-        let mut mt = MongoMerkle::construct([0; 32].into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+        let mut mt =
+            MongoMerkle::construct([0; 32].into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
         let (mut leaf, _) = mt.get_leaf_with_proof(2_u32.pow(20) - 1).unwrap();
         leaf.set(&[1u8; 32].to_vec());
         mt.set_leaf_with_proof(&leaf).unwrap();
@@ -842,5 +855,3 @@ mod tests {
         // TODO
     }
 }
-
-
