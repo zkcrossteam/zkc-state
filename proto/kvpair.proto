@@ -38,25 +38,18 @@ message Proof {
   bytes proof = 2;
 }
 
-message GetRootRequest { bytes contract_id = 1; }
+message GetRootRequest {}
 
-message GetRootResponse {
-  bytes contract_id = 1;
-  bytes root = 2;
-}
+message GetRootResponse { bytes root = 1; }
 
-message SetRootRequest { bytes contract_id = 1; }
+message SetRootRequest {}
 
-message SetRootResponse {
-  bytes contract_id = 1;
-  bytes root = 2;
-}
+message SetRootResponse { bytes root = 1; }
 
 message GetLeafRequest {
-  bytes contract_id = 1;
-  uint32 index = 2;
-  bytes hash = 3;
-  ProofType proof_type = 4;
+  uint32 index = 1;
+  bytes hash = 2;
+  ProofType proof_type = 3;
 }
 
 message GetLeafResponse {
@@ -65,19 +58,17 @@ message GetLeafResponse {
 }
 
 message GetNonLeafRequest {
-  bytes contract_id = 1;
-  uint32 index = 2;
-  bytes hash = 3;
+  uint32 index = 1;
+  bytes hash = 2;
 }
 
 message GetNonLeafResponse { Node node = 1; }
 
 message SetLeafRequest {
-  bytes contract_id = 1;
-  uint32 index = 2;
-  bytes hash = 3;
-  bytes leaf_data = 4;
-  ProofType proof_type = 5;
+  uint32 index = 1;
+  bytes hash = 2;
+  bytes leaf_data = 3;
+  ProofType proof_type = 4;
 }
 
 message SetLeafResponse {
@@ -86,11 +77,10 @@ message SetLeafResponse {
 }
 
 message SetNonLeafRequest {
-  bytes contract_id = 1;
-  uint32 index = 2;
-  bytes hash = 3;
-  bytes left_child_hash = 4;
-  bytes right_child_hash = 5;
+  uint32 index = 1;
+  bytes hash = 2;
+  bytes left_child_hash = 3;
+  bytes right_child_hash = 4;
 }
 
 message SetNonLeafResponse { Node node = 1; }
@@ -101,11 +91,31 @@ service KVPair {
       get : "/v1/root"
     };
   }
-  rpc SetRoot(SetRootRequest) returns (SetRootResponse) {}
+  rpc SetRoot(SetRootRequest) returns (SetRootResponse) {
+    option (google.api.http) = {
+      post : "/v1/root"
+    };
+  }
 
-  rpc GetLeaf(GetLeafRequest) returns (GetLeafResponse) {}
-  rpc SetLeaf(SetLeafRequest) returns (GetLeafResponse) {}
+  rpc GetLeaf(GetLeafRequest) returns (GetLeafResponse) {
+    option (google.api.http) = {
+      get : "/v1/leaves"
+    };
+  }
+  rpc SetLeaf(SetLeafRequest) returns (GetLeafResponse) {
+    option (google.api.http) = {
+      post : "/v1/leaves"
+    };
+  }
 
-  rpc GetNonLeaf(GetNonLeafRequest) returns (GetNonLeafResponse) {}
-  rpc SetNonLeaf(SetNonLeafRequest) returns (SetNonLeafResponse) {}
+  rpc GetNonLeaf(GetNonLeafRequest) returns (GetNonLeafResponse) {
+    option (google.api.http) = {
+      get : "/v1/nonleaves"
+    };
+  }
+  rpc SetNonLeaf(SetNonLeafRequest) returns (SetNonLeafResponse) {
+    option (google.api.http) = {
+      post : "/v1/nonleaves"
+    };
+  }
 }
