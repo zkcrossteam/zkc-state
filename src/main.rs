@@ -1,4 +1,3 @@
-use mongodb::Client;
 use tonic::transport::Server;
 use tonic_web::GrpcWebLayer;
 
@@ -14,10 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()
         .unwrap();
 
-    let mongodb_uri: String =
-        std::env::var("MONGODB_URI").unwrap_or("mongodb://localhost:27017".to_string());
-    let client = Client::with_uri_str(&mongodb_uri).await?;
-    let server = MongoKvPair::new(client);
+    let server = MongoKvPair::new().await;
     let server = KvPairServer::new(server);
 
     println!("Server listening on {}", addr);

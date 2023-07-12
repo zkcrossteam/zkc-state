@@ -353,7 +353,14 @@ impl MongoCollection<MerkleRecord> {
 }
 
 impl MongoKvPair {
-    pub fn new(client: Client) -> Self {
+    pub async fn new() -> Self {
+        let mongodb_uri: String =
+            std::env::var("MONGODB_URI").unwrap_or("mongodb://localhost:27017".to_string());
+        let client = Client::with_uri_str(&mongodb_uri).await.unwrap();
+        MongoKvPair::new_with_client(client)
+    }
+
+    pub fn new_with_client(client: Client) -> Self {
         Self { client }
     }
 

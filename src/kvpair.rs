@@ -10,8 +10,8 @@ use ff::PrimeField;
 use futures::executor;
 use halo2_proofs::pairing::bn256::Fr;
 
+use mongodb::bson::doc;
 use mongodb::bson::{spec::BinarySubtype, Bson};
-use mongodb::{bson::doc, Client};
 use serde::{
     de::{Error as SerdeError, Unexpected},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -357,10 +357,7 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
     type Node = MerkleRecord;
 
     fn construct(addr: Self::Id, root: Self::Root) -> Self {
-        let mongodb_uri: String =
-            std::env::var("MONGODB_URI").unwrap_or("mongodb://localhost:27017".to_string());
-        let client = executor::block_on(Client::with_uri_str(&mongodb_uri)).unwrap();
-        let server = MongoKvPair::new(client);
+        let server = executor::block_on(MongoKvPair::new());
         let collection = executor::block_on(server.new_collection::<MerkleRecord>(&addr, false))
             .expect("Unexpected DB Error");
 
