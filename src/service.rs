@@ -189,9 +189,7 @@ impl MongoCollection<MerkleRecord> {
     }
 
     pub async fn get_root_merkle_record(&mut self) -> Result<Option<MerkleRecord>, Error> {
-        let hash = Hash::default();
-        let mut filter = doc! {};
-        filter.insert("hash", hash_to_bson(&hash));
+        let filter = doc! {"_id": Self::get_current_root_object_id()};
         let record = self.find_one(filter, None).await?;
         Ok(record)
     }
