@@ -1,6 +1,7 @@
 use crate::merkle::get_node_type;
 use crate::proto::node::NodeData;
 use crate::proto::{Node, NodeChildren, NodeType};
+use crate::service::{MongoCollection, MongoKvPair};
 use crate::Error;
 
 use super::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleTree};
@@ -10,7 +11,6 @@ use futures::executor;
 use halo2_proofs::pairing::bn256::Fr;
 
 use mongodb::bson::{spec::BinarySubtype, Bson};
-use mongodb::options::DropCollectionOptions;
 use mongodb::{bson::doc, Client};
 use serde::{
     de::{Error as SerdeError, Unexpected},
@@ -129,8 +129,6 @@ impl From<[u8; 32]> for LeafData {
     }
 }
 
-pub const MONGODB_URI: &str = "mongodb://localhost:27017";
-
 fn deserialize_u256_as_binary<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
 where
     D: Deserializer<'de>,
@@ -162,68 +160,9 @@ pub fn hash_to_bson(x: &Hash) -> Bson {
 
 #[derive(Debug)]
 pub struct MongoMerkle {
-    contract_address: ContractId,
     root_hash: Hash,
     default_hash: Vec<Hash>,
-}
-
-pub async fn get_collection<T>(
-    database: String,
-    name: String,
-) -> Result<mongodb::Collection<T>, mongodb::error::Error> {
-    let client = Client::with_uri_str(MONGODB_URI).await?;
-    let database = client.database(database.as_str());
-    Ok(database.collection::<T>(name.as_str()))
-}
-
-pub async fn drop_collection(database: String, name: String) -> Result<(), mongodb::error::Error> {
-    let collection = get_collection::<MerkleRecord>(database, name).await?;
-    let options = DropCollectionOptions::builder().build();
-    collection.drop(options).await
-}
-
-impl MongoMerkle {
-    fn get_collection_name(&self) -> String {
-        format!("MERKLEDATA_{}", hex::encode(self.contract_address.0))
-    }
-    fn get_db_name() -> String {
-        "zkwasmkvpair".to_string()
-    }
-
-    pub async fn get_record(
-        &self,
-        index: u32,
-        hash: &Hash,
-    ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
-        let dbname = Self::get_db_name();
-        let cname = self.get_collection_name();
-        let collection = get_collection::<MerkleRecord>(dbname, cname).await?;
-        let mut filter = doc! {};
-        filter.insert("index", index);
-        filter.insert("hash", hash_to_bson(hash));
-        collection.find_one(filter, None).await
-    }
-
-    /* We always insert new record as there might be uncommitted update to the merkle tree */
-    pub async fn update_record(&self, record: MerkleRecord) -> Result<(), mongodb::error::Error> {
-        let dbname = Self::get_db_name();
-        let cname = self.get_collection_name();
-        let collection = get_collection::<MerkleRecord>(dbname, cname).await?;
-        let mut filter = doc! {};
-        filter.insert("index", record.index);
-        filter.insert("hash", hash_to_bson(&record.hash));
-        let exists = collection.find_one(filter, None).await?;
-        exists.map_or(
-            {
-                collection.insert_one(record, None).await?;
-                Ok(())
-            },
-            |_| {
-                //println!("find existing node, preventing duplicate");
-                Ok(())
-            },
-        )
-    }
+    collection: MongoCollection<MerkleRecord>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq)]
@@ -350,6 +289,10 @@ impl MongoMerkle {
             ))
         }
     }
+
+    async fn must_drop_collection(&mut self) {
+        self.collection.drop().await.unwrap();
+    }
 }
 
 // In default_hash vec, it is from leaf to root.
@@ -373,10 +316,17 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
     type Node = MerkleRecord;
 
     fn construct(addr: Self::Id, root: Self::Root) -> Self {
+        let mongodb_uri: String =
+            std::env::var("MONGODB_URI").unwrap_or("mongodb://localhost:27017".to_string());
+        let client = executor::block_on(Client::with_uri_str(&mongodb_uri)).unwrap();
+        let server = MongoKvPair::new(client);
+        let collection = executor::block_on(server.new_collection::<MerkleRecord>(&addr, false))
+            .expect("Unexpected DB Error");
+
         MongoMerkle {
-            contract_address: addr,
             root_hash: root,
             default_hash: (*DEFAULT_HASH_VEC).clone(),
+            collection,
         }
     }
 
@@ -408,12 +358,14 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
             hash: *hash,
         };
         //println!("set_node_with_hash {} {:?}", index, hash);
-        executor::block_on(self.update_record(record)).expect("Unexpected DB Error");
+        executor::block_on(self.collection.insert_merkle_record(&record))
+            .expect("Unexpected DB Error");
         Ok(())
     }
 
-    fn get_node_with_hash(&self, index: u32, hash: &Hash) -> Result<Self::Node, MerkleError> {
-        let v = executor::block_on(self.get_record(index, hash)).expect("Unexpected DB Error");
+    fn get_node_with_hash(&mut self, index: u32, hash: &Hash) -> Result<Self::Node, MerkleError> {
+        let v = executor::block_on(self.collection.get_merkle_record(index, hash))
+            .expect("Unexpected DB Error");
         //println!("get_node_with_hash {} {:?} {:?}", index, hash, v);
         let height = (index + 1).ilog2();
         v.map_or(
@@ -445,7 +397,8 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
 
     fn set_leaf(&mut self, leaf: &MerkleRecord) -> Result<(), MerkleError> {
         self.boundary_check(leaf.index())?; //should be leaf check?
-        executor::block_on(self.update_record(leaf.clone())).expect("Unexpected DB Error");
+        executor::block_on(self.collection.insert_merkle_record(&leaf.clone()))
+            .expect("Unexpected DB Error");
         Ok(())
     }
 }
@@ -454,7 +407,7 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
 mod tests {
     use super::{MongoMerkle, DEFAULT_HASH_VEC};
     use crate::{
-        kvpair::{drop_collection, Hash},
+        kvpair::Hash,
         merkle::{MerkleNode, MerkleTree},
     };
     use futures::executor;
@@ -521,11 +474,7 @@ mod tests {
         // 1
         let mut mt =
             MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(drop_collection(
-            MongoMerkle::get_db_name(),
-            mt.get_collection_name(),
-        ))
-        .expect("Unexpected DB Error");
+        executor::block_on(mt.must_drop_collection());
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -572,7 +521,7 @@ mod tests {
 
         // 5
         let a: [u8; 32] = ROOT_HASH_AFTER_LEAF2;
-        let mt_loaded: MongoMerkle = MongoMerkle::construct(TEST_ADDR.into(), a.into());
+        let mut mt_loaded: MongoMerkle = MongoMerkle::construct(TEST_ADDR.into(), a.into());
         assert_eq!(mt_loaded.get_root_hash().0, a);
         let (leaf1, _) = mt_loaded.get_leaf_with_proof(INDEX1).unwrap();
         assert_eq!(leaf1.index, INDEX1);
@@ -629,11 +578,7 @@ mod tests {
         // 1
         let mut mt =
             MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(drop_collection(
-            MongoMerkle::get_db_name(),
-            mt.get_collection_name(),
-        ))
-        .expect("Unexpected DB Error");
+        executor::block_on(mt.must_drop_collection());
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -664,7 +609,7 @@ mod tests {
 
         // 4
         let a = ROOT_HASH_AFTER_LEAF1;
-        let mt = MongoMerkle::construct(TEST_ADDR.into(), a.into());
+        let mut mt = MongoMerkle::construct(TEST_ADDR.into(), a.into());
         assert_eq!(mt.get_root_hash().0, a);
         let (leaf, _) = mt.get_leaf_with_proof(INDEX1).unwrap();
         assert_eq!(leaf.index, INDEX1);
@@ -745,11 +690,7 @@ mod tests {
         // 1
         let mut mt =
             MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(drop_collection(
-            MongoMerkle::get_db_name(),
-            mt.get_collection_name(),
-        ))
-        .expect("Unexpected DB Error");
+        executor::block_on(mt.must_drop_collection());
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -819,7 +760,7 @@ mod tests {
         assert_eq!(leaf.data.0, LEAF3_DATA);
 
         // 5
-        let mt = MongoMerkle::construct(TEST_ADDR.into(), ROOT_HASH_AFTER_LEAF3.into());
+        let mut mt = MongoMerkle::construct(TEST_ADDR.into(), ROOT_HASH_AFTER_LEAF3.into());
         assert_eq!(mt.get_root_hash().0, ROOT_HASH_AFTER_LEAF3);
         let (leaf, _) = mt.get_leaf_with_proof(INDEX1).unwrap();
         assert_eq!(leaf.index, INDEX1);

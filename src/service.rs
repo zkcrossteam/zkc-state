@@ -22,6 +22,7 @@ pub struct MongoKvPair {
     client: Client,
 }
 
+#[derive(Debug)]
 pub struct MongoCollection<T> {
     collection: Collection<T>,
     session: Option<ClientSession>,
@@ -310,7 +311,7 @@ impl MongoCollection<MerkleRecord> {
         ))
     }
 
-    async fn set_leaf_and_get_proof(
+    pub async fn set_leaf_and_get_proof(
         &mut self,
         leaf: &MerkleRecord,
     ) -> Result<MerkleProof<Hash, MERKLE_TREE_HEIGHT>, Error> {

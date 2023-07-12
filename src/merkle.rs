@@ -173,7 +173,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
     fn hash(a: &H, b: &H) -> H;
     fn set_parent(&mut self, index: u32, hash: &H, left: &H, right: &H) -> Result<(), MerkleError>;
     fn set_leaf(&mut self, leaf: &Self::Node) -> Result<(), MerkleError>;
-    fn get_node_with_hash(&self, index: u32, hash: &H) -> Result<Self::Node, MerkleError>;
+    fn get_node_with_hash(&mut self, index: u32, hash: &H) -> Result<Self::Node, MerkleError>;
 
     fn get_root_hash(&self) -> H;
     fn update_root_hash(&mut self, hash: &H);
@@ -204,7 +204,7 @@ pub trait MerkleTree<H: Debug + Clone + PartialEq, const D: usize> {
     }
 
     fn get_leaf_with_proof(
-        &self,
+        &mut self,
         index: u32,
     ) -> Result<(Self::Node, MerkleProof<H, D>), MerkleError> {
         self.leaf_check(index)?;
@@ -349,7 +349,11 @@ mod tests {
         }
         fn update_root_hash(&mut self, _h: &u64) {}
 
-        fn get_node_with_hash(&self, index: u32, _hash: &u64) -> Result<Self::Node, MerkleError> {
+        fn get_node_with_hash(
+            &mut self,
+            index: u32,
+            _hash: &u64,
+        ) -> Result<Self::Node, MerkleError> {
             self.boundary_check(index)?;
             Ok(MerkleU64Node {
                 value: self.data[index as usize],
