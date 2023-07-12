@@ -1,10 +1,9 @@
 `zkc_state_manager` is a rust program to manage zkcross states.
 
-Users may use [gRPC](https://grpc.io/) or [REST](https://en.wikipedia.org/wiki/Representational_state_transfer) interfaces to state their data to
-store their desired data.
+Users may use [gRPC](https://grpc.io/) or [REST](https://en.wikipedia.org/wiki/Representational_state_transfer) interfaces to store their data.
 
 The following components are implemented. The user-facing proxy envoy is used to transcode gRPC protobuf (which is prevailing in the microservice world)
-to json (which is more friendly to front-end developers) and authorize API accesses. The auth package is a go program called by envoy
+to json (which is more friendly to front-end developers) and authorize API accesses. The [`auth`](./services/auth) package is a go program called by envoy
 to check the validity of API accesses. We use [hyperium/tonic](https://github.com/hyperium/tonic)
 to implement a gRPC server which ideally saves uses data into [data availability committees](https://ethereum.org/en/developers/docs/data-availability/).
 But we have only immplemented a data storage which uses MongoDB under the hood.
