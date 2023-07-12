@@ -1,16 +1,12 @@
 syntax = "proto3";
 
+import "google/api/annotations.proto";
+
 package kvpair;
 
-message ContractID { bytes id = 1; }
-
-message Hash { bytes hash = 1; }
-
-message LeafData { bytes data = 1; }
-
 message NodeChildren {
-  Hash left_child_hash = 5;
-  Hash right_child_hash = 6;
+  bytes left_child_hash = 5;
+  bytes right_child_hash = 6;
 }
 
 enum NodeType {
@@ -21,10 +17,10 @@ enum NodeType {
 
 message Node {
   uint64 index = 1;
-  Hash hash = 2;
+  bytes hash = 2;
   NodeType node_type = 3;
   oneof things {
-    LeafData data = 4;
+    bytes data = 4;
     NodeChildren children = 5;
   }
 }
@@ -41,24 +37,24 @@ message Proof {
   repeated Node nodes = 2;
 }
 
-message GetRootRequest { ContractID contract_id = 1; }
+message GetRootRequest { bytes contract_id = 1; }
 
 message GetRootResponse {
-  ContractID contract_id = 1;
-  Hash root = 2;
+  bytes contract_id = 1;
+  bytes root = 2;
 }
 
-message SetRootRequest { ContractID contract_id = 1; }
+message SetRootRequest { bytes contract_id = 1; }
 
 message SetRootResponse {
-  ContractID contract_id = 1;
-  Hash root = 2;
+  bytes contract_id = 1;
+  bytes root = 2;
 }
 
 message GetLeafRequest {
-  ContractID contract_id = 1;
+  bytes contract_id = 1;
   uint64 index = 2;
-  Hash hash = 3;
+  bytes hash = 3;
   ProofType proof_type = 4;
 }
 
@@ -68,18 +64,18 @@ message GetLeafResponse {
 }
 
 message GetNonLeafRequest {
-  ContractID contract_id = 1;
+  bytes contract_id = 1;
   uint64 index = 2;
-  Hash hash = 3;
+  bytes hash = 3;
 }
 
 message GetNonLeafResponse { Node node = 1; }
 
 message SetLeafRequest {
-  ContractID contract_id = 1;
+  bytes contract_id = 1;
   uint64 index = 2;
-  Hash hash = 3;
-  LeafData leaf_data = 4;
+  bytes hash = 3;
+  bytes leaf_data = 4;
   ProofType proof_type = 5;
 }
 
@@ -89,17 +85,21 @@ message SetLeafResponse {
 }
 
 message SetNonLeafRequest {
-  ContractID contract_id = 1;
+  bytes contract_id = 1;
   uint64 index = 2;
-  Hash hash = 3;
-  Hash left_child_hash = 4;
-  Hash right_child_hash = 5;
+  bytes hash = 3;
+  bytes left_child_hash = 4;
+  bytes right_child_hash = 5;
 }
 
 message SetNonLeafResponse { Node node = 1; }
 
 service KVPair {
-  rpc GetRoot(GetRootRequest) returns (GetRootResponse) {}
+  rpc GetRoot(GetRootRequest) returns (GetRootResponse) {
+    option (google.api.http) = {
+      get : "/v1/root"
+    };
+  }
   rpc SetRoot(SetRootRequest) returns (SetRootResponse) {}
 
   rpc GetLeaf(GetLeafRequest) returns (GetLeafResponse) {}
