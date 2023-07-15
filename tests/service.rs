@@ -8,10 +8,13 @@ use zkc_state_manager::proto::kv_pair_client::KvPairClient;
 use zkc_state_manager::proto::kv_pair_server::KvPairServer;
 use zkc_state_manager::proto::node::NodeData;
 use zkc_state_manager::proto::GetLeafRequest;
+use zkc_state_manager::proto::GetLeafResponse;
 use zkc_state_manager::proto::GetRootRequest;
+use zkc_state_manager::proto::GetRootResponse;
 use zkc_state_manager::proto::NodeType;
 use zkc_state_manager::proto::ProofType;
 use zkc_state_manager::proto::SetLeafRequest;
+use zkc_state_manager::proto::SetLeafResponse;
 use zkc_state_manager::service::MongoKvPair;
 
 use std::future::Future;
@@ -61,15 +64,59 @@ async fn get_server_and_client_stub() -> (impl Future<Output = ()>, KvPairClient
     (serve_future, client)
 }
 
+async fn get_root(client: &mut KvPairClient<Channel>) -> GetRootResponse {
+    let response = client
+        .get_root(Request::new(GetRootRequest {}))
+        .await
+        .unwrap();
+    dbg!(&response);
+
+    response.into_inner()
+}
+
+async fn get_leaf(
+    client: &mut KvPairClient<Channel>,
+    index: u32,
+    proof_type: ProofType,
+) -> GetLeafResponse {
+    let response = client
+        .get_leaf(Request::new(GetLeafRequest {
+            index,
+            hash: None,
+            proof_type: proof_type.into(),
+        }))
+        .await
+        .unwrap();
+    dbg!(&response);
+
+    response.into_inner()
+}
+
+async fn set_leaf(
+    client: &mut KvPairClient<Channel>,
+    index: u32,
+    leaf_data: LeafData,
+    proof_type: ProofType,
+) -> SetLeafResponse {
+    let leaf_data: Vec<u8> = leaf_data.0.into();
+    let proof_type = proof_type.into();
+    let response = client
+        .set_leaf(Request::new(SetLeafRequest {
+            index,
+            leaf_data,
+            proof_type,
+        }))
+        .await
+        .unwrap();
+    dbg!(&response);
+
+    response.into_inner()
+}
+
 #[tokio::test]
-async fn get_root() {
+async fn test_get_root() {
     async fn test(client: &mut KvPairClient<Channel>) {
-        let response = client
-            .get_root(Request::new(GetRootRequest {}))
-            .await
-            .unwrap();
-        dbg!(&response);
-        let response = response.into_inner();
+        let response = get_root(client).await;
         assert_eq!(
             Hash::try_from(response.root.as_slice()).unwrap(),
             DEFAULT_HASH_VEC[MERKLE_TREE_HEIGHT]
@@ -86,19 +133,10 @@ async fn get_root() {
 }
 
 #[tokio::test]
-async fn get_leaf() {
+async fn test_get_leaf() {
     async fn test(client: &mut KvPairClient<Channel>) {
         let index = 2_u32.pow(MERKLE_TREE_HEIGHT as u32) - 1;
-        let response = client
-            .get_leaf(Request::new(GetLeafRequest {
-                index: 2_u32.pow(MERKLE_TREE_HEIGHT as u32) - 1,
-                hash: None,
-                proof_type: ProofType::ProofV0.into(),
-            }))
-            .await
-            .unwrap();
-        dbg!(&response);
-        let response = response.into_inner();
+        let response = get_leaf(client, index, ProofType::ProofV0).await;
         assert!(response.proof.is_some());
         assert!(response.node.is_some());
         let node = response.node.unwrap();
@@ -125,48 +163,27 @@ async fn get_leaf() {
 }
 
 #[tokio::test]
-async fn set_and_get_leaf() {
+async fn test_set_and_get_leaf() {
     async fn test(client: &mut KvPairClient<Channel>) {
         let index = 2_u32.pow(MERKLE_TREE_HEIGHT as u32) - 1;
-        let leaf_data: Vec<u8> = [42_u8; 32].into();
-        let response = client
-            .set_leaf(Request::new(SetLeafRequest {
-                index: 2_u32.pow(MERKLE_TREE_HEIGHT as u32) - 1,
-                leaf_data: leaf_data.clone(),
-                proof_type: ProofType::ProofEmpty.into(),
-            }))
-            .await
-            .unwrap();
-        dbg!(&response);
-        let response = response.into_inner();
+        let leaf_data: LeafData = [42_u8; 32].into();
+        let response = set_leaf(client, index, leaf_data, ProofType::ProofEmpty).await;
         assert!(response.node.is_some());
         let node = response.node.unwrap();
         assert_eq!(node.index, index);
         assert_eq!(node.node_type, NodeType::NodeLeaf as i32);
         match node.node_data {
             Some(NodeData::Data(data)) => {
-                assert_eq!(
-                    LeafData::try_from(data.as_slice()).unwrap(),
-                    LeafData::try_from(leaf_data.as_slice()).unwrap()
-                )
+                assert_eq!(LeafData::try_from(data.as_slice()).unwrap(), leaf_data)
             }
             _ => panic!("Invalid node data"),
         }
 
-        let response = client
-            .get_leaf(Request::new(GetLeafRequest {
-                index,
-                hash: None,
-                proof_type: ProofType::ProofEmpty.into(),
-            }))
-            .await
-            .unwrap();
-        dbg!(&response);
-        let response = response.into_inner();
+        let response = get_leaf(client, index, ProofType::ProofEmpty).await;
         assert!(response.node.is_some());
         assert_eq!(
             response.node.unwrap().node_data,
-            Some(NodeData::Data(leaf_data))
+            Some(NodeData::Data(leaf_data.into()))
         );
     }
 

@@ -462,7 +462,7 @@ impl KvPair for MongoKvPair {
     async fn set_leaf(
         &self,
         request: Request<SetLeafRequest>,
-    ) -> std::result::Result<Response<GetLeafResponse>, Status> {
+    ) -> std::result::Result<Response<SetLeafResponse>, Status> {
         dbg!(&request);
         let contract_id = get_contract_id(&request).unwrap_or_default();
         let request = request.into_inner();
@@ -483,7 +483,7 @@ impl KvPair for MongoKvPair {
         let node = record.try_into()?;
         collection.commit().await.map_err(Error::from)?;
         dbg!(&record, &node);
-        Ok(Response::new(GetLeafResponse {
+        Ok(Response::new(SetLeafResponse {
             node: Some(node),
             proof,
         }))
