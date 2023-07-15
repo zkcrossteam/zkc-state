@@ -30,7 +30,6 @@ lazy_static::lazy_static! {
             leaf_hash = Hash::hash_children(&leaf_hash, &leaf_hash);
             default_hash.push(leaf_hash);
         }
-        dbg!();
         default_hash.try_into().unwrap()
     };
 }
@@ -284,7 +283,8 @@ impl MerkleNode<Hash> for MerkleRecord {
     }
     fn set(&mut self, data: &[u8]) {
         let data: [u8; 32] = data.clone().try_into().unwrap();
-        self.hash = Hash::hash_data(&data.into());
+        self.data = data.into();
+        self.hash = Hash::hash_data(&self.data);
     }
     fn right(&self) -> Option<Hash> {
         Some(self.right)
