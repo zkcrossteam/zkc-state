@@ -20,8 +20,15 @@ use super::proto::Proof;
 use super::proto::ProofType;
 use super::proto::*;
 
+#[derive(Copy, Clone, Debug)]
+pub struct MongoKvPairTestConfig {
+    pub contract_id: ContractId,
+}
+
+#[derive(Clone, Debug)]
 pub struct MongoKvPair {
     client: Client,
+    test_config: Option<MongoKvPairTestConfig>,
 }
 
 #[derive(Debug)]
@@ -349,21 +356,17 @@ impl MongoKvPair {
         MongoKvPair::new_with_client(client)
     }
 
-    pub async fn new_test() -> Self {
-        let mongodb_uri: String =
-            std::env::var("MONGODB_URI").unwrap_or("mongodb://localhost:27017".to_string());
-        let client = Client::with_uri_str(&mongodb_uri).await.unwrap();
-        let db_name = MongoCollection::<MerkleRecord>::get_database_name();
-        let db = client.database(&db_name);
-        let _ = db
-            .drop(None)
-            .await
-            .map_err(|e| println! {"Dropping db {db_name} failed: {e}"});
-        MongoKvPair::new_with_client(client)
+    pub async fn new_with_test_config(test_config: MongoKvPairTestConfig) -> Self {
+        let mut client = Self::new().await;
+        client.test_config = Some(test_config);
+        client
     }
 
-    pub fn new_with_client(client: Client) -> Self {
-        Self { client }
+    fn new_with_client(client: Client) -> Self {
+        Self {
+            client,
+            test_config: None,
+        }
     }
 
     pub async fn new_collection<T>(
@@ -373,20 +376,39 @@ impl MongoKvPair {
     ) -> Result<MongoCollection<T>, Error> {
         Ok(MongoCollection::new(self.client.clone(), contract_id, with_session).await?)
     }
-}
 
-fn get_contract_id<T>(request: &Request<T>) -> Result<ContractId, Status> {
-    let id = request
-        .metadata()
-        .get("x-auth-contract-id")
-        .ok_or(Status::unauthenticated("Contract id not found"))?;
-    let contract_id = id
-        .to_str()
-        .map_err(|e| Status::unauthenticated(format!("Invalid Contract id: {e}")))?
-        .try_into()
-        .map_err(|e| Status::unauthenticated(format!("Invalid Contract id: {e}")))?;
-    dbg!(&contract_id);
-    Ok(contract_id)
+    pub async fn drop_test_collection(&self) -> Result<(), Error> {
+        if let Some(test_config) = &self.test_config {
+            let collection = self
+                .new_collection::<MerkleRecord>(&test_config.contract_id, false)
+                .await?;
+            collection.drop().await?;
+        }
+        Ok(())
+    }
+
+    fn do_get_contract_id<T>(&self, request: &Request<T>) -> Result<ContractId, Status> {
+        let id = request
+            .metadata()
+            .get("x-auth-contract-id")
+            .ok_or(Status::unauthenticated("Contract id not found"))?;
+        let contract_id = id
+            .to_str()
+            .map_err(|e| Status::unauthenticated(format!("Invalid Contract id: {e}")))?
+            .try_into()
+            .map_err(|e| Status::unauthenticated(format!("Invalid Contract id: {e}")))?;
+        dbg!(&contract_id);
+        Ok(contract_id)
+    }
+
+    fn get_contract_id<T>(&self, request: &Request<T>) -> Result<ContractId, Status> {
+        let default = if let Some(test_config) = &self.test_config {
+            test_config.contract_id
+        } else {
+            Default::default()
+        };
+        Ok(self.do_get_contract_id(request).unwrap_or(default))
+    }
 }
 
 #[tonic::async_trait]
@@ -396,7 +418,7 @@ impl KvPair for MongoKvPair {
         request: Request<GetRootRequest>,
     ) -> std::result::Result<Response<GetRootResponse>, Status> {
         dbg!(&request);
-        let contract_id = get_contract_id(&request).unwrap_or_default();
+        let contract_id = self.get_contract_id(&request)?;
         let mut collection = self.new_collection(&contract_id, false).await?;
         let record = collection.must_get_root_merkle_record().await?;
         Ok(Response::new(GetRootResponse {
@@ -417,7 +439,7 @@ impl KvPair for MongoKvPair {
         request: Request<GetLeafRequest>,
     ) -> std::result::Result<Response<GetLeafResponse>, Status> {
         dbg!(&request);
-        let contract_id = get_contract_id(&request).unwrap_or_default();
+        let contract_id = self.get_contract_id(&request)?;
         let request = request.into_inner();
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
@@ -464,7 +486,7 @@ impl KvPair for MongoKvPair {
         request: Request<SetLeafRequest>,
     ) -> std::result::Result<Response<SetLeafResponse>, Status> {
         dbg!(&request);
-        let contract_id = get_contract_id(&request).unwrap_or_default();
+        let contract_id = self.get_contract_id(&request)?;
         let request = request.into_inner();
         // TODO: Should use session here
         let mut collection = self.new_collection(&contract_id, false).await?;
