@@ -6,8 +6,8 @@ proto_dir="$top_dir/proto"
 
 cd "$top_dir"
 
-# Update descriptor sets for envoy:
-protoc -Iproto -I. --include_imports --include_source_info --descriptor_set_out=server/envoy/proto/kvpair.pb proto/kvpair.proto
+# Update descriptor sets for envoy.
+"${PROTOC:-protoc}" -Iproto -I. --include_imports --include_source_info --descriptor_set_out=server/envoy/proto/kvpair.pb proto/kvpair.proto
 
 for dir in services/*; do
     cp -r "$proto_dir" "$dir";
