@@ -9,10 +9,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: arduino/setup-protoc@v2
+        with:
+          version: "23.4"
       - run: |
           set -xeuo pipefail
           ./scripts/update_protos.sh
-          if git diff --exit-code; then
+          if ! git diff --exit-code; then
             echo "Protobuf files in a inconsistent state"
             echo "Run ./scripts/update_protos.sh and commit updates to git repo"
             exit 1

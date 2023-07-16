@@ -101,7 +101,7 @@ service KVPair {
       get : "/v1/leaves"
     };
   }
-  rpc SetLeaf(SetLeafRequest) returns (GetLeafResponse) {
+  rpc SetLeaf(SetLeafRequest) returns (SetLeafResponse) {
     option (google.api.http) = {
       post : "/v1/leaves"
     };
