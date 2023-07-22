@@ -53,7 +53,7 @@ async fn start_server_get_client_and_cancellation_handler() -> (
     let test_config = MongoKvPairTestConfig {
         contract_id: contract_id.into(),
     };
-    let server = MongoKvPair::new_with_test_config(test_config).await;
+    let server = MongoKvPair::new_with_test_config(Some(test_config)).await;
     let kvpair_server = KvPairServer::new(server.clone());
 
     let join_handler = tokio::spawn(async move {
@@ -85,7 +85,7 @@ async fn start_server_get_client_and_cancellation_handler() -> (
 
 async fn get_root(client: &mut KvPairClient<Channel>) -> GetRootResponse {
     let response = client
-        .get_root(Request::new(GetRootRequest {}))
+        .get_root(Request::new(GetRootRequest { contract_id: None }))
         .await
         .unwrap();
     dbg!(&response);
@@ -104,6 +104,7 @@ async fn get_leaf(
             index,
             hash: hash.map(|h| h.into()),
             proof_type: proof_type.into(),
+            contract_id: None,
         }))
         .await
         .unwrap();
@@ -125,6 +126,7 @@ async fn set_leaf(
             index,
             leaf_data,
             proof_type,
+            contract_id: None,
         }))
         .await
         .unwrap();

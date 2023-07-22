@@ -356,9 +356,9 @@ impl MongoKvPair {
         MongoKvPair::new_with_client(client)
     }
 
-    pub async fn new_with_test_config(test_config: MongoKvPairTestConfig) -> Self {
+    pub async fn new_with_test_config(test_config: Option<MongoKvPairTestConfig>) -> Self {
         let mut client = Self::new().await;
-        client.test_config = Some(test_config);
+        client.test_config = test_config;
         client
     }
 
@@ -387,7 +387,20 @@ impl MongoKvPair {
         Ok(())
     }
 
-    fn do_get_contract_id<T>(&self, request: &Request<T>) -> Result<ContractId, Status> {
+    // Validate the contract id passed from http request or gRPC request parameter.
+    // TODO: This function does nothing yet.
+    fn validate_contract_id<T>(
+        &self,
+        _request: &Request<T>,
+        _contract_id: &ContractId,
+    ) -> Result<(), Status> {
+        Ok(())
+    }
+
+    fn get_contract_id_from_request_context<T>(
+        &self,
+        request: &Request<T>,
+    ) -> Result<ContractId, Status> {
         let id = request
             .metadata()
             .get("x-auth-contract-id")
@@ -398,16 +411,48 @@ impl MongoKvPair {
             .try_into()
             .map_err(|e| Status::unauthenticated(format!("Invalid Contract id: {e}")))?;
         dbg!(&contract_id);
+        self.validate_contract_id(request, &contract_id)?;
         Ok(contract_id)
     }
 
-    fn get_contract_id<T>(&self, request: &Request<T>) -> Result<ContractId, Status> {
-        let default = if let Some(test_config) = &self.test_config {
-            test_config.contract_id
-        } else {
-            Default::default()
-        };
-        Ok(self.do_get_contract_id(request).unwrap_or(default))
+    fn get_contract_id_from_request_parameters<T>(
+        &self,
+        request: &Request<T>,
+        contract_id: &[u8],
+    ) -> Result<ContractId, Status> {
+        let contract_id: ContractId = contract_id.try_into()?;
+        self.validate_contract_id(request, &contract_id)?;
+        return Ok(contract_id);
+    }
+
+    // Ideally the contract id should be obtained from the request context (e.g. lookup the
+    // contract id coresponding to the token in the http header or use the contract id passed from http header directly).
+    // But we have to take care of a few things.
+    // 1. When we are testing the functionality of this program, we hard code a contract id in the
+    //    test config. If that is the case, we use this contract id directly.
+    // 2. Since the construct meothod of MerkleTree trait expects a contract_id, we need a way for
+    //    the client to specify the contract id directly. In this case, we use the contract id from
+    //    the gRPC request. We may need to validate the legality of this contract id. But we
+    //    currently do nothing.
+    // 3. Currently, if contract_id is not passed from any of these methods (test config, gRPC
+    //    request parameter and http header), we just use the default contract id. This is only
+    //    used to facliliate development. We MUST remove this when we are ready.
+    fn get_contract_id<T>(
+        &self,
+        request: &Request<T>,
+        contract_id: &Option<Vec<u8>>,
+    ) -> Result<ContractId, Status> {
+        if let Some(test_config) = &self.test_config {
+            return Ok(test_config.contract_id);
+        }
+
+        if let Some(contract_id) = contract_id {
+            return self.get_contract_id_from_request_parameters(request, contract_id);
+        }
+
+        Ok(self
+            .get_contract_id_from_request_context(request)
+            .unwrap_or_default())
     }
 }
 
@@ -418,7 +463,7 @@ impl KvPair for MongoKvPair {
         request: Request<GetRootRequest>,
     ) -> std::result::Result<Response<GetRootResponse>, Status> {
         dbg!(&request);
-        let contract_id = self.get_contract_id(&request)?;
+        let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
         let mut collection = self.new_collection(&contract_id, false).await?;
         let record = collection.must_get_root_merkle_record().await?;
         Ok(Response::new(GetRootResponse {
@@ -439,7 +484,7 @@ impl KvPair for MongoKvPair {
         request: Request<GetLeafRequest>,
     ) -> std::result::Result<Response<GetLeafResponse>, Status> {
         dbg!(&request);
-        let contract_id = self.get_contract_id(&request)?;
+        let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
         let request = request.into_inner();
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
@@ -486,7 +531,7 @@ impl KvPair for MongoKvPair {
         request: Request<SetLeafRequest>,
     ) -> std::result::Result<Response<SetLeafResponse>, Status> {
         dbg!(&request);
-        let contract_id = self.get_contract_id(&request)?;
+        let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
         let request = request.into_inner();
         // TODO: Should use session here
         let mut collection = self.new_collection(&contract_id, false).await?;

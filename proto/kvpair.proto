@@ -38,18 +38,22 @@ message Proof {
   bytes proof = 2;
 }
 
-message GetRootRequest {}
+message GetRootRequest { optional bytes contract_id = 1; }
 
 message GetRootResponse { bytes root = 1; }
 
 message SetRootRequest {}
 
-message SetRootResponse { bytes root = 1; }
+message SetRootResponse {
+  bytes root = 1;
+  optional bytes contract_id = 2;
+}
 
 message GetLeafRequest {
   uint32 index = 1;
   optional bytes hash = 2;
   ProofType proof_type = 3;
+  optional bytes contract_id = 4;
 }
 
 message GetLeafResponse {
@@ -68,6 +72,7 @@ message SetLeafRequest {
   uint32 index = 1;
   bytes leaf_data = 2;
   ProofType proof_type = 3;
+  optional bytes contract_id = 4;
 }
 
 message SetLeafResponse {
