@@ -440,13 +440,6 @@ impl MongoMerkle {
         leaf.set([0; 32].as_ref());
         leaf
     }
-    // pub async fn get_collection(&self, with_session: bool) -> MongoCollection<MerkleRecord> {
-    //     Ok(MongoCollection::new(self.client.clone(), self.contract_id, with_session).await?)
-    // }
-    pub async fn must_drop_collection(&mut self) {
-        // unimplemented!();
-        // self.get_collection(false).drop().await.unwrap();
-    }
 
     // Start a gRPC server in the background, returns the JoinHandle to the background task of this
     // server, a RPC client for this server and a channel sender which can be used to cancel the
@@ -719,7 +712,6 @@ mod tests {
         kvpair::Hash,
         merkle::{MerkleNode, MerkleTree},
     };
-    use futures::executor;
 
     #[test]
     /* Test for check parent node
@@ -786,7 +778,6 @@ mod tests {
         // 1
         let mut mt =
             MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(mt.must_drop_collection());
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -893,7 +884,6 @@ mod tests {
         // 1
         let mut mt =
             MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(mt.must_drop_collection());
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -1008,7 +998,6 @@ mod tests {
         // 1
         let mut mt =
             MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        executor::block_on(mt.must_drop_collection());
         let root = mt.get_root_hash();
         let root64 = root
             .0
