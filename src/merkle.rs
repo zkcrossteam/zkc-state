@@ -115,6 +115,7 @@ pub enum MerkleErrorCode {
     InvalidHash,
     InvalidDepth,
     InvalidIndex,
+    InvalidOther,
 }
 
 #[derive(Debug)]

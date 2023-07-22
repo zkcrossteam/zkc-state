@@ -422,7 +422,7 @@ impl MongoKvPair {
     ) -> Result<ContractId, Status> {
         let contract_id: ContractId = contract_id.try_into()?;
         self.validate_contract_id(request, &contract_id)?;
-        return Ok(contract_id);
+        Ok(contract_id)
     }
 
     // Ideally the contract id should be obtained from the request context (e.g. lookup the
