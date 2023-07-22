@@ -1,7 +1,12 @@
 use crate::merkle::get_node_type;
+use crate::proto::kv_pair_client::KvPairClient;
+use crate::proto::kv_pair_server::KvPairServer;
 use crate::proto::node::NodeData;
-use crate::proto::{Node, NodeChildren, NodeType};
-use crate::service::{MongoCollection, MongoKvPair};
+use crate::proto::{
+    GetLeafRequest, GetLeafResponse, GetRootRequest, GetRootResponse, Node, NodeChildren, NodeType,
+    ProofType, SetLeafRequest, SetLeafResponse,
+};
+use crate::service::{MongoCollection, MongoKvPair, MongoKvPairTestConfig};
 use crate::Error;
 
 use super::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleTree};
@@ -16,6 +21,16 @@ use serde::{
     de::{Error as SerdeError, Unexpected},
     Deserialize, Deserializer, Serialize, Serializer,
 };
+
+use std::sync::Arc;
+
+use futures::{channel::oneshot, FutureExt};
+use tempfile::NamedTempFile;
+use tokio::net::{UnixListener, UnixStream};
+use tokio_stream::wrappers::UnixListenerStream;
+use tonic::transport::{Channel, Endpoint, Server, Uri};
+use tonic::Request;
+use tower::service_fn;
 
 pub const MERKLE_TREE_HEIGHT: usize = 20;
 
@@ -155,6 +170,27 @@ impl Hash {
             ))
         }
     }
+
+    pub fn validate_children(hash: &Self, left: &Self, right: &Self) -> Result<(), Error> {
+        let new_hash = Hash::hash_children(&left, &right);
+        if *hash != new_hash {
+            return Err(Error::InvalidArgument(format!(
+                "Hash not matching: {:?} and {:?} hashed to {:?}, not {:?}",
+                &left, &right, &new_hash, &hash
+            )));
+        }
+        Ok(())
+    }
+    pub fn validate_data(hash: &Hash, data: &LeafData) -> Result<(), Error> {
+        let new_hash = Self::hash_data(data);
+        if *hash != new_hash {
+            return Err(Error::InvalidArgument(format!(
+                "Hash not matching: {:?} hashed to {:?}, not {:?}",
+                &data, &new_hash, &hash
+            )));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
@@ -221,7 +257,9 @@ pub fn hash_to_bson(x: &Hash) -> Bson {
 #[derive(Debug)]
 pub struct MongoMerkle {
     root_hash: Hash,
-    collection: MongoCollection<MerkleRecord>,
+    contract_id: ContractId,
+    client: KvPairClient<Channel>,
+    stop: Option<oneshot::Sender<()>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq)]
@@ -320,6 +358,14 @@ impl MerkleRecord {
         record
     }
 
+    pub fn new_root(left: impl Into<Hash>, right: impl Into<Hash>) -> Self {
+        let mut record = MerkleRecord::new(0);
+        record.left = left.into();
+        record.right = right.into();
+        record.hash = Hash::hash_children(&record.left, &record.right);
+        record
+    }
+
     pub fn data_as_u64(&self) -> [u64; 4] {
         [
             u64::from_le_bytes(self.data.0[0..8].try_into().unwrap()),
@@ -357,7 +403,124 @@ impl MongoMerkle {
         leaf
     }
     pub async fn must_drop_collection(&mut self) {
-        self.collection.drop().await.unwrap();
+        unimplemented!();
+    }
+
+    // Start a gRPC server in the background, returns the JoinHandle to the background task of this
+    // server, a RPC client for this server and a channel sender which can be used to cancel the
+    // executation of this gRPC server by sending a message `()` with this sender. This function
+    // automatically creates a random collection which is automatically dropped at the executation of
+    // the server task.
+    pub async fn start_server_get_client_and_cancellation_handler(
+        test_config: Option<MongoKvPairTestConfig>,
+    ) -> (
+        tokio::task::JoinHandle<()>,
+        KvPairClient<Channel>,
+        oneshot::Sender<()>,
+    ) {
+        let (tx, rx) = oneshot::channel::<()>();
+        let socket = NamedTempFile::new().unwrap();
+        let socket = Arc::new(socket.into_temp_path());
+        std::fs::remove_file(&*socket).unwrap();
+
+        let uds = UnixListener::bind(&*socket).unwrap();
+        let stream = UnixListenerStream::new(uds);
+
+        let server = MongoKvPair::new_with_test_config(test_config).await;
+        let kvpair_server = KvPairServer::new(server.clone());
+
+        let join_handler = tokio::spawn(async move {
+            let result = Server::builder()
+                .add_service(kvpair_server)
+                .serve_with_incoming_shutdown(stream, rx.map(drop))
+                .await;
+            let result2 = server.drop_test_collection().await;
+            assert!(result.is_ok());
+            assert!(result2.is_ok());
+        });
+
+        let socket = Arc::clone(&socket);
+        // Connect to the server over a Unix socket
+        // The URL will be ignored.
+        let channel = Endpoint::try_from("http://any.url")
+            .unwrap()
+            .connect_with_connector(service_fn(move |_: Uri| {
+                let socket = Arc::clone(&socket);
+                async move { UnixStream::connect(&*socket).await }
+            }))
+            .await
+            .unwrap();
+
+        let client = KvPairClient::new(channel);
+
+        (join_handler, client, tx)
+    }
+
+    async fn get_root(&mut self) -> GetRootResponse {
+        let response = self
+            .client
+            .get_root(Request::new(GetRootRequest {
+                contract_id: Some(self.contract_id.into()),
+            }))
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        response.into_inner()
+    }
+
+    async fn get_leaf(
+        &mut self,
+        index: u32,
+        hash: Option<Hash>,
+        proof_type: ProofType,
+    ) -> GetLeafResponse {
+        let response = self
+            .client
+            .get_leaf(Request::new(GetLeafRequest {
+                index,
+                hash: hash.map(|h| h.into()),
+                proof_type: proof_type.into(),
+                contract_id: Some(self.contract_id.into()),
+            }))
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        response.into_inner()
+    }
+
+    async fn set_leaf(
+        &mut self,
+        index: u32,
+        leaf_data: LeafData,
+        proof_type: ProofType,
+    ) -> SetLeafResponse {
+        let leaf_data: Vec<u8> = leaf_data.0.into();
+        let proof_type = proof_type.into();
+        let response = self
+            .client
+            .set_leaf(Request::new(SetLeafRequest {
+                index,
+                leaf_data,
+                proof_type,
+                contract_id: Some(self.contract_id.into()),
+            }))
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        response.into_inner()
+    }
+}
+
+impl Drop for MongoMerkle {
+    fn drop(&mut self) {
+        if let Some(tx) = self.stop.take() {
+            if let Err(e) = tx.send(()) {
+                dbg!(e);
+            };
+        }
     }
 }
 
@@ -367,13 +530,14 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
     type Node = MerkleRecord;
 
     fn construct(addr: Self::Id, root: Self::Root) -> Self {
-        let server = executor::block_on(MongoKvPair::new());
-        let collection = executor::block_on(server.new_collection::<MerkleRecord>(&addr, false))
-            .expect("Unexpected DB Error");
+        let (_join_handler, client, tx) =
+            executor::block_on(Self::start_server_get_client_and_cancellation_handler(None));
 
         MongoMerkle {
             root_hash: root,
-            collection,
+            client,
+            contract_id: addr,
+            stop: Some(tx),
         }
     }
 
@@ -400,22 +564,25 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
         let record = MerkleRecord::new_non_leaf(index, *left, *right);
         assert_eq!(hash, &record.hash);
         //println!("set_node_with_hash {} {:?}", index, hash);
-        executor::block_on(self.collection.insert_merkle_record(&record))
-            .expect("Unexpected DB Error");
-        Ok(())
+        unimplemented!();
+        // executor::block_on(self.collection.insert_merkle_record(&record))
+        //     .expect("Unexpected DB Error");
+        // Ok(())
     }
 
     fn get_node_with_hash(&mut self, index: u32, hash: &Hash) -> Result<Self::Node, MerkleError> {
-        let v = executor::block_on(self.collection.must_get_merkle_record(index, hash))
-            .expect("Unexpected DB Error");
-        Ok(v)
+        unimplemented!();
+        // let v = executor::block_on(self.collection.must_get_merkle_record(index, hash))
+        //     .expect("Unexpected DB Error");
+        // Ok(v)
     }
 
     fn set_leaf(&mut self, leaf: &MerkleRecord) -> Result<(), MerkleError> {
         self.boundary_check(leaf.index())?; //should be leaf check?
-        executor::block_on(self.collection.insert_merkle_record(&leaf.clone()))
-            .expect("Unexpected DB Error");
-        Ok(())
+        unimplemented!();
+        // executor::block_on(self.collection.insert_merkle_record(&leaf.clone()))
+        //     .expect("Unexpected DB Error");
+        // Ok(())
     }
 }
 

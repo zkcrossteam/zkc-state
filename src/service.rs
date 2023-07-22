@@ -475,8 +475,21 @@ impl KvPair for MongoKvPair {
         &self,
         request: Request<SetRootRequest>,
     ) -> std::result::Result<Response<SetRootResponse>, Status> {
-        dbg!(request);
-        unimplemented!()
+        dbg!(&request);
+        let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
+        let request = request.into_inner();
+        let mut collection = self.new_collection(&contract_id, false).await?;
+        let left: Hash = request.left_child_hash.as_slice().try_into()?;
+        let right: Hash = request.right_child_hash.as_slice().try_into()?;
+        if let Some(hash) = request.hash {
+            Hash::validate_children(&hash.as_slice().try_into()?, &left, &right)?;
+        }
+        let record = MerkleRecord::new_root(left, right);
+        let record = collection.update_root_merkle_record(&record).await?;
+        dbg!(&record);
+        Ok(Response::new(SetRootResponse {
+            root: record.hash.into(),
+        }))
     }
 
     async fn get_leaf(
@@ -560,15 +573,36 @@ impl KvPair for MongoKvPair {
         &self,
         request: Request<GetNonLeafRequest>,
     ) -> std::result::Result<Response<GetNonLeafResponse>, Status> {
-        dbg!(request);
-        unimplemented!()
+        dbg!(&request);
+        let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
+        let request = request.into_inner();
+        let mut collection = self.new_collection(&contract_id, false).await?;
+        let index = request.index;
+        let hash: Hash = request.hash.as_slice().try_into()?;
+        let record = collection.must_get_merkle_record(index, &hash).await?;
+        let node = record.try_into()?;
+        dbg!(&record, &node);
+        Ok(Response::new(GetNonLeafResponse { node: Some(node) }))
     }
 
     async fn set_non_leaf(
         &self,
         request: Request<SetNonLeafRequest>,
     ) -> std::result::Result<Response<SetNonLeafResponse>, Status> {
-        dbg!(request);
-        unimplemented!()
+        dbg!(&request);
+        let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
+        let request = request.into_inner();
+        // TODO: Should use session here
+        let mut collection = self.new_collection(&contract_id, false).await?;
+        let index = request.index;
+        let left: Hash = request.left_child_hash.as_slice().try_into()?;
+        let right: Hash = request.right_child_hash.as_slice().try_into()?;
+        if let Some(hash) = request.hash {
+            Hash::validate_children(&hash.as_slice().try_into()?, &left, &right)?;
+        }
+        let record = collection.insert_non_leaf_node(index, left, right).await?;
+        let node = record.try_into()?;
+        dbg!(&record, &node);
+        Ok(Response::new(SetNonLeafResponse { node: Some(node) }))
     }
 }

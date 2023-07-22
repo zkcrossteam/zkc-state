@@ -42,12 +42,14 @@ message GetRootRequest { optional bytes contract_id = 1; }
 
 message GetRootResponse { bytes root = 1; }
 
-message SetRootRequest {}
-
-message SetRootResponse {
-  bytes root = 1;
-  optional bytes contract_id = 2;
+message SetRootRequest {
+  optional bytes hash = 1;
+  bytes left_child_hash = 2;
+  bytes right_child_hash = 3;
+  optional bytes contract_id = 4;
 }
+
+message SetRootResponse { bytes root = 1; }
 
 message GetLeafRequest {
   uint32 index = 1;
@@ -64,6 +66,7 @@ message GetLeafResponse {
 message GetNonLeafRequest {
   uint32 index = 1;
   bytes hash = 2;
+  optional bytes contract_id = 3;
 }
 
 message GetNonLeafResponse { Node node = 1; }
@@ -82,9 +85,10 @@ message SetLeafResponse {
 
 message SetNonLeafRequest {
   uint32 index = 1;
-  bytes hash = 2;
+  optional bytes hash = 2;
   bytes left_child_hash = 3;
   bytes right_child_hash = 4;
+  optional bytes contract_id = 5;
 }
 
 message SetNonLeafResponse { Node node = 1; }
@@ -123,3 +127,5 @@ service KVPair {
     };
   }
 }
+
+
