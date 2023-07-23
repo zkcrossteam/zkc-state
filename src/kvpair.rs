@@ -707,11 +707,22 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
 
 #[cfg(test)]
 mod tests {
+    use rand::{thread_rng, RngCore};
+
     use super::{MongoMerkle, DEFAULT_HASH_VEC};
     use crate::{
         kvpair::Hash,
         merkle::{MerkleNode, MerkleTree},
     };
+
+    fn get_test_contract_id() -> [u8; 32] {
+        let mut rng = thread_rng();
+        let mut contract_id = [0u8; 32];
+        rng.fill_bytes(&mut contract_id);
+        let prefix = b"test";
+        contract_id[0..prefix.len()].copy_from_slice(prefix);
+        contract_id
+    }
 
     #[test]
     /* Test for check parent node
@@ -726,7 +737,7 @@ mod tests {
         let _enter = rt.enter();
 
         // Init checking results
-        const TEST_ADDR: [u8; 32] = [1; 32];
+        let test_addr: [u8; 32] = get_test_contract_id();
 
         const DEFAULT_ROOT_HASH: [u8; 32] = [
             73, 83, 87, 90, 86, 12, 245, 204, 26, 115, 174, 210, 71, 149, 39, 167, 187, 3, 97, 202,
@@ -777,7 +788,7 @@ mod tests {
 
         // 1
         let mut mt =
-            MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+            MongoMerkle::construct(test_addr.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -824,7 +835,7 @@ mod tests {
 
         // 5
         let a: [u8; 32] = ROOT_HASH_AFTER_LEAF2;
-        let mut mt_loaded: MongoMerkle = MongoMerkle::construct(TEST_ADDR.into(), a.into());
+        let mut mt_loaded: MongoMerkle = MongoMerkle::construct(test_addr.into(), a.into());
         assert_eq!(mt_loaded.get_root_hash().0, a);
         let (leaf1, _) = mt_loaded.get_leaf_with_proof(INDEX1).unwrap();
         assert_eq!(leaf1.index, INDEX1);
@@ -852,7 +863,7 @@ mod tests {
         let _enter = rt.enter();
 
         // Init checking results
-        const TEST_ADDR: [u8; 32] = [2; 32];
+        let test_addr: [u8; 32] = get_test_contract_id();
         const DEFAULT_ROOT_HASH: [u8; 32] = [
             73, 83, 87, 90, 86, 12, 245, 204, 26, 115, 174, 210, 71, 149, 39, 167, 187, 3, 97, 202,
             100, 149, 65, 101, 59, 11, 239, 93, 150, 126, 33, 11,
@@ -883,7 +894,7 @@ mod tests {
 
         // 1
         let mut mt =
-            MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+            MongoMerkle::construct(test_addr.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -914,7 +925,7 @@ mod tests {
 
         // 4
         let a = ROOT_HASH_AFTER_LEAF1;
-        let mut mt = MongoMerkle::construct(TEST_ADDR.into(), a.into());
+        let mut mt = MongoMerkle::construct(test_addr.into(), a.into());
         assert_eq!(mt.get_root_hash().0, a);
         let (leaf, _) = mt.get_leaf_with_proof(INDEX1).unwrap();
         assert_eq!(leaf.index, INDEX1);
@@ -934,7 +945,7 @@ mod tests {
         let _enter = rt.enter();
 
         // Init checking results
-        const TEST_ADDR: [u8; 32] = [3; 32];
+        let test_addr: [u8; 32] = get_test_contract_id();
         const DEFAULT_ROOT_HASH: [u8; 32] = [
             73, 83, 87, 90, 86, 12, 245, 204, 26, 115, 174, 210, 71, 149, 39, 167, 187, 3, 97, 202,
             100, 149, 65, 101, 59, 11, 239, 93, 150, 126, 33, 11,
@@ -997,7 +1008,7 @@ mod tests {
 
         // 1
         let mut mt =
-            MongoMerkle::construct(TEST_ADDR.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+            MongoMerkle::construct(test_addr.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -1067,7 +1078,7 @@ mod tests {
         assert_eq!(leaf.data.0, LEAF3_DATA);
 
         // 5
-        let mut mt = MongoMerkle::construct(TEST_ADDR.into(), ROOT_HASH_AFTER_LEAF3.into());
+        let mut mt = MongoMerkle::construct(test_addr.into(), ROOT_HASH_AFTER_LEAF3.into());
         assert_eq!(mt.get_root_hash().0, ROOT_HASH_AFTER_LEAF3);
         let (leaf, _) = mt.get_leaf_with_proof(INDEX1).unwrap();
         assert_eq!(leaf.index, INDEX1);
