@@ -1,4 +1,4 @@
-FROM golang:1.20-alpine as builder
+FROM docker.io/golang:1.20-alpine as builder
 
 WORKDIR /app
 
@@ -9,6 +9,6 @@ RUN go mod download
 COPY ./ ./
 RUN go build -o /auth
 
-FROM alpine:3.18
+FROM docker.io/alpine:3.18
 COPY --from=builder /auth /auth
 CMD ["/auth"]

@@ -1,4 +1,4 @@
-FROM rust:1.66-alpine as builder
+FROM docker.io/rust:1.66-alpine as builder
 
 RUN apk add --no-cache musl-dev protoc protobuf-dev
 
@@ -12,7 +12,7 @@ RUN mkdir ./src && echo 'fn main() { println!("Dummy!"); }' > ./src/main.rs && c
 COPY ./ ./
 RUN cargo install --frozen --offline --path .
 
-FROM alpine:3.18
+FROM docker.io/alpine:3.18
 COPY --from=builder /usr/local/cargo/bin/zkc_state_manager /usr/local/bin/myapp
 EXPOSE 50051
 CMD ["myapp"]
