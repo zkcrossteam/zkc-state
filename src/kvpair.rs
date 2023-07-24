@@ -1,13 +1,13 @@
 use crate::merkle::get_node_type;
 use crate::proto::kv_pair_client::KvPairClient;
-use crate::proto::kv_pair_server::KvPairServer;
+
 use crate::proto::node::NodeData;
 use crate::proto::{
     GetLeafRequest, GetLeafResponse, GetNonLeafRequest, GetNonLeafResponse, GetRootRequest,
     GetRootResponse, Node, NodeChildren, NodeType, ProofType, SetLeafRequest, SetLeafResponse,
     SetNonLeafRequest, SetNonLeafResponse, SetRootRequest, SetRootResponse,
 };
-use crate::service::{MongoKvPair, MongoKvPairTestConfig};
+
 use crate::Error;
 
 use super::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleTree};
@@ -23,15 +23,8 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 
-use std::sync::Arc;
-
-use futures::{channel::oneshot, FutureExt};
-use tempfile::NamedTempFile;
-use tokio::net::{UnixListener, UnixStream};
-use tokio_stream::wrappers::UnixListenerStream;
-use tonic::transport::{Channel, Endpoint, Server, Uri};
+use tonic::transport::Channel;
 use tonic::{Request, Status};
-use tower::service_fn;
 
 pub const MERKLE_TREE_HEIGHT: usize = 20;
 
@@ -260,7 +253,6 @@ pub struct MongoMerkle {
     root_hash: Hash,
     contract_id: ContractId,
     client: KvPairClient<Channel>,
-    stop: Option<oneshot::Sender<ContractId>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq)]
@@ -432,6 +424,12 @@ impl MerkleRecord {
 }
 
 impl MongoMerkle {
+    pub async fn get_client() -> KvPairClient<Channel> {
+        KvPairClient::connect("http://localhost:50051")
+            .await
+            .expect("Connect gRPC server")
+    }
+
     pub fn height() -> usize {
         MERKLE_TREE_HEIGHT
     }
@@ -439,72 +437,6 @@ impl MongoMerkle {
         let mut leaf = MerkleRecord::new(index);
         leaf.set([0; 32].as_ref());
         leaf
-    }
-
-    // Start a gRPC server in the background, returns the JoinHandle to the background task of this
-    // server, a RPC client for this server and a channel sender which can be used to cancel the
-    // executation of this gRPC server by sending a message `()` with this sender. This function
-    // automatically creates a random collection which is automatically dropped at the executation of
-    // the server task.
-    pub async fn start_server_get_client_and_cancellation_handler(
-        test_config: Option<MongoKvPairTestConfig>,
-    ) -> (
-        tokio::task::JoinHandle<()>,
-        KvPairClient<Channel>,
-        oneshot::Sender<ContractId>,
-    ) {
-        let (tx, rx) = oneshot::channel::<ContractId>();
-        let socket = NamedTempFile::new().unwrap();
-        let socket = Arc::new(socket.into_temp_path());
-        std::fs::remove_file(&*socket).unwrap();
-
-        let uds = UnixListener::bind(&*socket).unwrap();
-        let stream = UnixListenerStream::new(uds);
-
-        let server = MongoKvPair::new_with_test_config(test_config).await;
-        let kvpair_server = KvPairServer::new(server.clone());
-
-        let join_handler = tokio::spawn(async move {
-            let result = Server::builder()
-                .add_service(kvpair_server)
-                .serve_with_incoming_shutdown(
-                    stream,
-                    rx.then(|contract_id| async move {
-                        if let Ok(contract_id) = contract_id {
-                            let collection = server
-                                .new_collection::<MerkleRecord>(&contract_id, false)
-                                .await
-                                .expect("Create collection");
-                            if let Err(error) = collection.drop().await {
-                                dbg!(error);
-                                panic!("Drop collection failed");
-                            };
-                        };
-                        if let Err(error) = server.drop_test_collection().await {
-                            dbg!(error);
-                            panic!("Drop collection failed");
-                        }
-                    }),
-                )
-                .await;
-            assert!(result.is_ok());
-        });
-
-        let socket = Arc::clone(&socket);
-        // Connect to the server over a Unix socket
-        // The URL will be ignored.
-        let channel = Endpoint::try_from("http://any.url")
-            .unwrap()
-            .connect_with_connector(service_fn(move |_: Uri| {
-                let socket = Arc::clone(&socket);
-                async move { UnixStream::connect(&*socket).await }
-            }))
-            .await
-            .unwrap();
-
-        let client = KvPairClient::new(channel);
-
-        (join_handler, client, tx)
     }
 
     pub async fn get_root(&mut self) -> Result<GetRootResponse, Status> {
@@ -622,30 +554,18 @@ impl MongoMerkle {
     }
 }
 
-impl Drop for MongoMerkle {
-    fn drop(&mut self) {
-        if let Some(tx) = self.stop.take() {
-            if let Err(e) = tx.send(self.contract_id) {
-                dbg!(e);
-            };
-        }
-    }
-}
-
 impl MerkleTree<Hash, 20> for MongoMerkle {
     type Id = ContractId;
     type Root = Hash;
     type Node = MerkleRecord;
 
     fn construct(addr: Self::Id, root: Self::Root) -> Self {
-        let (_join_handler, client, tx) =
-            executor::block_on(Self::start_server_get_client_and_cancellation_handler(None));
+        let client = executor::block_on(Self::get_client());
 
         MongoMerkle {
             root_hash: root,
             client,
             contract_id: addr,
-            stop: Some(tx),
         }
     }
 

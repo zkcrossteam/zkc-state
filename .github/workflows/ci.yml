@@ -15,16 +15,12 @@ jobs:
       - run: cargo check
 
   test:
-    services:
-      mongodb:
-        image: mongo:6
-        ports:
-          - 27017:27017
-    name: Test Suite
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: arduino/setup-protoc@v2
+      - uses: isbang/compose-action@v1.5.0
       - uses: dsherret/rust-toolchain-file@v1
       - run: cargo test
 
