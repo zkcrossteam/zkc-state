@@ -23,6 +23,15 @@ jobs:
         with:
           mode: development
       - uses: arduino/setup-protoc@v2
+      - uses: Swatinem/rust-cache@v2
+      - uses: docker/setup-buildx-action@v2
+      - name: build docker compose file
+        uses: docker/bake-action@v3
+        with:
+          load: true
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha
       - uses: isbang/compose-action@v1.5.0
       - uses: dsherret/rust-toolchain-file@v1
       - run: cargo test
