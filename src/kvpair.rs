@@ -425,7 +425,9 @@ impl MerkleRecord {
 
 impl MongoMerkle {
     pub async fn get_client() -> KvPairClient<Channel> {
-        KvPairClient::connect("http://localhost:50051")
+        let server =
+            std::env::var("KVPAIR_GRPC_SERVER_URL").unwrap_or("http://localhost:50051".to_string());
+        KvPairClient::connect(server)
             .await
             .expect("Connect gRPC server")
     }

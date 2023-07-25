@@ -8,7 +8,12 @@ use zkc_state_manager::service::MongoKvPair;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "0.0.0.0:50051".parse().unwrap();
+    let addr = format!(
+        "0.0.0.0:{}",
+        std::env::var("KVPAIR_PORT").unwrap_or("50051".to_string())
+    )
+    .parse()
+    .unwrap();
 
     let reflection_service = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)

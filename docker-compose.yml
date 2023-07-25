@@ -3,14 +3,22 @@ services:
     image: mongo:6
     ports:
       - 27017:27017
+    volumes:
+      - './data/mongodb:/data/db'
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USERNAME:-root}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}
 
   envoy:
     build: ./server/envoy
     ports:
       - 9901:9901
       - 50000:50000
+
   auth:
     build: ./services/auth
+    environment:
+      - MONGODB_URI=mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}@mongodb:27017
 
   kvpair:
     build:
@@ -18,4 +26,6 @@ services:
     ports:
       - 50051:50051
     environment:
-      - MONGODB_URI=mongodb://mongodb:27017
+      - MONGODB_URI=mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}@mongodb:27017
+      - KVPAIR_PORT=50051
+      - KVPAIR_GRPC_SERVER_URL=http://localhost:50051
