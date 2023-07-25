@@ -154,7 +154,13 @@ to the downstream request.
 In the future, we may lookup token and client information from MongoDB, determine if the request is valid and pass the client information to gRPC server.
 
 ## Tonic gRPC server
-We implemented part of the service `KvPair` in [./proto/kvpair.proto](./proto/kvpair.proto).
+We implemented part of the service `KvPair` in [./proto/kvpair.proto](./proto/kvpair.proto). Users may use the services provided by this server
+with RESTFUL API as noted above or directly issue RPC with gRPC. An example usage is available at [./src/kvpair.rs](./src/kvpair.rs).
+
+### kvpair
+This kvpair service implements the Merkle tree trait. Instead of storing Merkle tree data locally, we send the data to the gRPC server and the server
+stores the data. Set the environment variable `KVPAIR_GRPC_SERVER_URL`, and then create a `MongoMerkle` with `MongoMerkle::construct` to use this crate.
+One thing to note is that we the gRPC server is currently not protected by authentication. We should not expose this service publicly.
 
 ## MongoDB
 All the nodes in the Merkle tree are stored in the same collection with `MerkleRecord` as their data format.
