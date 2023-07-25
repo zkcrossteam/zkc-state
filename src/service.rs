@@ -353,6 +353,16 @@ impl MongoKvPair {
         let mongodb_uri: String =
             std::env::var("MONGODB_URI").unwrap_or("mongodb://localhost:27017".to_string());
         let client = Client::with_uri_str(&mongodb_uri).await.unwrap();
+        // Eagerly connect to mongodb server to fail faster.
+        let _ = client
+            .list_database_names(
+                doc! {
+                    "name": MongoCollection::<String>::get_database_name(),
+                },
+                None,
+            )
+            .await
+            .expect("List databases");
         MongoKvPair::new_with_client(client)
     }
 
