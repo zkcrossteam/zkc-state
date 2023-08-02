@@ -50,8 +50,20 @@ Users are encouraged to visit [Supported languages | gRPC](https://grpc.io/docs/
 ## REST
 The same functions are available from RESTful server started by enovy. By default of the [./docker-compose.yml](./docker-compose.yml)
 file, the REST server can be accessed at port `50000`. The HTTP routes are defined in the file [./proto/kvpair.proto](./proto/kvpair.proto).
-Below are two API access examples with [curl](https://curl.se/). All the messages fields with type `bytes` are serialized/deserialized
-with the base64 encoding scheme. `enum`s can be serialized/deserialized with the string liternal of the `enum` branch to use.
+Below are two API access examples with [curl](https://curl.se/).
+
+### Encoding/decoding
+#### Bytes
+All the messages fields with type `bytes` are serialized/deserialized with the base64 encoding scheme.
+For example, the 32 bytes array `[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]`
+is encoded as the string "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=".
+This can be done with the command
+```
+printf "$(echo '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]' | jq '.[]' | xargs -n 1 printf '\\x%s')" | base64
+```
+
+#### Enums
+`enum`s can be serialized/deserialized with the string liternal of the `enum` branch to use.
 For example, when we need to set the `proof_type` field with type `ProofType` and value `ProofEmpty`, we can use 
 ```
 {
@@ -110,7 +122,7 @@ returns
 
 ### Update leaf node data
 ```bash
-curl -v -H token:abc --json '{"index":1048575,"leaf_data":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
+curl -v -H token:abc --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":1048575,"leaf_data":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
 ```
 returns
 ```
