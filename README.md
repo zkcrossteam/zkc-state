@@ -127,6 +127,20 @@ returns
  }
 }
 ```
+## How to calculate index manually
+```
+let address = self.address.rules[0].u64_value().unwrap() as u32;
+let index = (address as u32) + (1u32<<MERKLE_TREE_HEIGHT) - 1;
+```
+So if a address is 0x19281, then index = 0x19281 + (1u32<<20) - 1 = 1152511.
+
+## How to calculate leaf data manually
+Leaf data must be a uint32[] array, can use the below command to convert a value to uint32[] array.
+```
+
+```
+
+
 
 # Components
 
