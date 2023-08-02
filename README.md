@@ -54,9 +54,10 @@ Below are two API access examples with [curl](https://curl.se/).
 
 ### Encoding/decoding
 #### Bytes
-All the messages fields with type `bytes` are serialized/deserialized with the base64 encoding scheme.
+All the message fields with type `bytes` are serialized/deserialized with the base64 encoding scheme.
 For example, the 32 bytes array `[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]`
 is encoded as the string "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=".
+
 This can be done with the command
 ```
 printf "$(echo '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]' | jq '.[]' | xargs -n 1 printf '\\x%s')" | base64
@@ -81,6 +82,36 @@ returns
 ```
 {
  "root": "SVNXWlYM9cwac67SR5Unp7sDYcpklUFlOwvvXZZ+IQs="
+}
+```
+
+#### Note: We don't have the set root hash API
+
+In zkWasm kvpair code there is a kvpair_setroot() API which is actually used to:
+1) initialize an empty Merkle tree.
+2) Save `contract_id` parameter as `contract_address` which will be used for collection_name
+```
+      fn get_collection_name(&self) -> String {
+        format!("MERKLEDATA_{}", hex::encode(&self.contract_address))
+    } 
+```
+
+While in our case, 
+1) The initialization will be done when the server is started.
+2) The `contract_address` parameter can be passed as an optional parameter in GetLeaft/SetLeaf request.
+```
+message GetLeafRequest {
+  optional bytes contract_id = 1;
+  uint32 index = 2;
+  optional bytes hash = 3;
+  ProofType proof_type = 4;
+}
+
+message SetLeafRequest {
+  optional bytes contract_id = 1;
+  uint32 index = 2;
+  bytes leaf_data = 3;
+  ProofType proof_type = 4;
 }
 ```
 
@@ -147,9 +178,10 @@ let index = (address as u32) + (1u32<<MERKLE_TREE_HEIGHT) - 1;
 So if a address is 0x19281, then index = 0x19281 + (1u32<<20) - 1 = 1152511.
 
 ## How to calculate leaf data manually
-Leaf data must be a uint32[] array, can use the below command to convert between base64 value and uint32[] array.
+Leaf data must be a uint8[32] array, the below command can be used to convert between base64 value and uint[32] array.
 
 e.g 
+### Get value
 ```
 curl -v -H token:abc "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
 ```
@@ -162,21 +194,22 @@ curl -v -H token:abc "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
  }
 ```
 
+The return data is "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADCAE=", the actual data would be
+
 ```
 $  base64 -d <<< AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADCAE= | xxd
 00000000: 0000 0000 0000 0000 0000 0000 0000 0000  ................
 00000010: 0000 0000 0000 0000 0000 0000 0003 0801  ................
-```
 
-So if the return data is "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE", the actually data would be
-```
 [u8; 32] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 03, 08, 01]
 ```
+### Update value
 
-If you want to update the leaf data to. e.g 
+If you want to update the leaf data. e.g 
+```
 [u8; 32] = [0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-
-Turn to base64:
+```
+First, encode the data to base64:
 ```
 $ printf "$(printf 0012000000000000000000000000000000000000000000000000000000000001 | fold -w 2 | xargs -n 1 printf '\\x%s')" | base64
 ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=
@@ -185,16 +218,13 @@ ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=
 And then set:
 ```
 curl -v -H token:abc --json '{"index":1152511,"leaf_data":"ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://rpc.zkcross.org:50000/v1/leaves"
-
 ```
+### Get new value
 
-Read back to confirm:
-```
-
+Now you can read back to confirm:
 ```
 curl -v -H token:abc "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
 
-```
  "node": {
   "index": 1152511,
   "hash": "zIEbxu4rl6oqoraI5w0yGAatkERPpiX/wWj5p3/M9yw=",
@@ -202,6 +232,9 @@ curl -v -H token:abc "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
   "data": "ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE="
  }
 
+$ base64 -d <<< ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE= | xxd
+00000000: 0012 0000 0000 0000 0000 0000 0000 0000  ................
+00000010: 0000 0000 0000 0000 0000 0000 0000 0001  ................
 ```
 
 # Components
