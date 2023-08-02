@@ -135,12 +135,62 @@ let index = (address as u32) + (1u32<<MERKLE_TREE_HEIGHT) - 1;
 So if a address is 0x19281, then index = 0x19281 + (1u32<<20) - 1 = 1152511.
 
 ## How to calculate leaf data manually
-Leaf data must be a uint32[] array, can use the below command to convert a value to uint32[] array.
+Leaf data must be a uint32[] array, can use the below command to convert between base64 value and uint32[] array.
+
+e.g 
+```
+curl -v -H token:abc "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
+```
+```
+ "node": {
+  "index": 1152511,
+  "hash": "htrWqb9MdIsgU2JDSmW0/zKu1l9OlHip1SlNTGD0txk=",
+  "node_type": "NodeLeaf",
+  "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADCAE="
+ }
 ```
 
 ```
+$  base64 -d <<< AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADCAE= | xxd
+00000000: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00000010: 0000 0000 0000 0000 0000 0000 0003 0801  ................
+```
 
+So if the return data is "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE", the actually data would be
+```
+[u8; 32] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 03, 08, 01]
+```
 
+If you want to update the leaf data to. e.g 
+[u8; 32] = [0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+
+Turn to base64:
+```
+$ printf "$(printf 0012000000000000000000000000000000000000000000000000000000000001 | fold -w 2 | xargs -n 1 printf '\\x%s')" | base64
+ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=
+```
+
+And then set:
+```
+curl -v -H token:abc --json '{"index":1152511,"leaf_data":"ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://rpc.zkcross.org:50000/v1/leaves"
+
+```
+
+Read back to confirm:
+```
+
+```
+curl -v -H token:abc "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
+
+```
+ "node": {
+  "index": 1152511,
+  "hash": "zIEbxu4rl6oqoraI5w0yGAatkERPpiX/wWj5p3/M9yw=",
+  "node_type": "NodeLeaf",
+  "data": "ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE="
+ }
+
+```
 
 # Components
 
