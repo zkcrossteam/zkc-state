@@ -22,12 +22,23 @@ static_resources:
                       routes:
                         - match: { prefix: "/kvpair.KVPair" }
                           route: { cluster: kvpair-grpc, timeout: 60s }
+                      cors:
+                        allow_origin_string_match:
+                        - safe_regex:
+                            regex: ".*"
+                        allow_methods: "GET"
                 http_filters:
+                  - name: envoy.filters.http.cors
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
                   - name: envoy.filters.http.grpc_json_transcoder
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
                       proto_descriptor: "etc/envoy/proto/kvpair.pb"
                       services: ["kvpair.KVPair"]
+                      request_validation_options:
+                        reject_unknown_method: false
+                        reject_unknown_query_parameters: false
                       print_options:
                         add_whitespace: true
                         always_print_primitive_fields: true
