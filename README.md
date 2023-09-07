@@ -76,7 +76,7 @@ For example, when we need to set the `proof_type` field with type `ProofType` an
 
 ### Get Merkle tree root hash
 ```bash
-curl -v -H token:abc "http://localhost:50000/v1/root"
+curl -v "http://localhost:50000/v1/root"
 ```
 returns
 ```
@@ -118,7 +118,7 @@ message SetLeafRequest {
 ### Get nonleaf node children hashes
 Given the above Merkle tree root, we can obtain the hashes of its children with
 ```bash
-curl -v -H token:abc "http://localhost:50000/v1/nonleaves?index=0&hash=SVNXWlYM9cwac67SR5Unp7sDYcpklUFlOwvvXZZ+IQs="
+curl -v "http://localhost:50000/v1/nonleaves?index=0&hash=SVNXWlYM9cwac67SR5Unp7sDYcpklUFlOwvvXZZ+IQs="
 ```
 returns
 ```
@@ -137,7 +137,7 @@ returns
 
 ### Get leaf node data
 ```bash
-curl -v -H token:abc "http://localhost:50000/v1/leaves?index=1048575"
+curl -v "http://localhost:50000/v1/leaves?index=1048575"
 ```
 returns
 ```
@@ -153,7 +153,7 @@ returns
 
 ### Update leaf node data
 ```bash
-curl -v -H token:abc --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":1048575,"leaf_data":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
+curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":1048575,"leaf_data":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
 ```
 returns
 ```
@@ -183,7 +183,7 @@ Leaf data must be a uint8[32] array, the below command can be used to convert be
 e.g 
 ### Get value
 ```
-curl -v -H token:abc "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
+curl -v "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
 ```
 ```
  "node": {
@@ -217,13 +217,13 @@ ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=
 
 And then set:
 ```
-curl -v -H token:abc --json '{"index":1152511,"leaf_data":"ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://rpc.zkcross.org:50000/v1/leaves"
+curl -v --json '{"index":1152511,"leaf_data":"ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://rpc.zkcross.org:50000/v1/leaves"
 ```
 ### Get new value
 
 Now you can read back to confirm:
 ```
-curl -v -H token:abc "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
+curl -v "http://rpc.zkcross.org:50000/v1/leaves?index=1152511"
 
  "node": {
   "index": 1152511,
@@ -256,8 +256,7 @@ and determine whether to allow this request to hit at the gRPC server. If the re
 to gRPC server (e.g. contract ID used to track which contract is calling this API).
 
 ## Auth
-The only functionality currently implemented in `auth` is to check the fixed header (`token: abc`) is presented
-if it is there the allow this request and then append a fixed HTTP header `x-auth-contract-id: FX6glXnwnPljB/ayPW/WHDz/EjB21Ewn4um+3wITXoc=`
+The only functionality currently implemented in `auth` is to append a fixed HTTP header `x-auth-contract-id: FX6glXnwnPljB/ayPW/WHDz/EjB21Ewn4um+3wITXoc=`
 to the downstream request.
 
 In the future, we may lookup token and client information from MongoDB, determine if the request is valid and pass the client information to gRPC server.
