@@ -1,7 +1,9 @@
 use futures::{channel::oneshot, FutureExt};
+use http::Method;
 use tokio::signal;
 use tonic::transport::Server;
 use tonic_web::GrpcWebLayer;
+use tower_http::cors::{Any, CorsLayer};
 
 use zkc_state_manager::proto::{kv_pair_server::KvPairServer, FILE_DESCRIPTOR_SET};
 use zkc_state_manager::service::MongoKvPair;
@@ -36,10 +38,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         send.send(()).expect("Send shutdown signal");
     });
 
+    let cors = CorsLayer::new()
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods([Method::GET, Method::POST])
+        // allow requests from any origin
+        .allow_origin(Any);
+
     Server::builder()
         // GrpcWeb is over http1 so we must enable it.
         .accept_http1(true)
         .layer(GrpcWebLayer::new())
+        .layer(cors)
         .add_service(reflection_service)
         .add_service(tonic_web::enable(server))
         .serve_with_shutdown(addr, recv.map(drop))
