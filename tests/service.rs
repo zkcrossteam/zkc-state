@@ -95,7 +95,7 @@ async fn get_root(client: &mut KvPairClient<Channel>) -> GetRootResponse {
 
 async fn get_leaf(
     client: &mut KvPairClient<Channel>,
-    index: u32,
+    index: u64,
     hash: Option<Hash>,
     proof_type: ProofType,
 ) -> GetLeafResponse {
@@ -115,7 +115,7 @@ async fn get_leaf(
 
 async fn set_leaf(
     client: &mut KvPairClient<Channel>,
-    index: u32,
+    index: u64,
     leaf_data: LeafData,
     proof_type: ProofType,
 ) -> SetLeafResponse {
@@ -154,7 +154,7 @@ async fn test_get_root() {
 #[tokio::test]
 async fn test_get_leaf() {
     async fn test(client: &mut KvPairClient<Channel>) {
-        let index = 2_u32.pow(MERKLE_TREE_HEIGHT as u32) - 1;
+        let index = 2_u64.pow(MERKLE_TREE_HEIGHT.try_into().unwrap()) - 1;
         let response = get_leaf(client, index, None, ProofType::ProofV0).await;
         assert!(response.proof.is_some());
         assert!(response.node.is_some());
@@ -181,7 +181,7 @@ async fn test_get_leaf() {
 #[tokio::test]
 async fn test_set_and_get_leaf() {
     async fn test(client: &mut KvPairClient<Channel>) {
-        let index = 2_u32.pow(MERKLE_TREE_HEIGHT as u32) - 1;
+        let index = 2_u64.pow(MERKLE_TREE_HEIGHT.try_into().unwrap()) - 1;
         let leaf_data: LeafData = [42_u8; 32].into();
         let response = set_leaf(client, index, leaf_data, ProofType::ProofEmpty).await;
         assert!(response.node.is_some());
@@ -234,10 +234,10 @@ async fn test_merkle_parent_node() {
     async fn test(client: &mut KvPairClient<Channel>) {
         /* Test for check parent node
          * 1. Clear m tree collection. Create default empty m tree. Check root.
-         * 2. Update index=2_u32.pow(20) - 1 (first leaf) leave value.
-         * 3. Update index=2_u32.pow(20) (second leaf) leave value.
-         * 4. Get index=2_u32.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
-         * 5. Load mt from DB and Get index=2_u32.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
+         * 2. Update index=2_u64.pow(20) - 1 (first leaf) leave value.
+         * 3. Update index=2_u64.pow(20) (second leaf) leave value.
+         * 4. Get index=2_u64.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
+         * 5. Load mt from DB and Get index=2_u64.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
          */
         // Init checking results
         const DEFAULT_ROOT_HASH: [u8; 32] = [
@@ -245,7 +245,7 @@ async fn test_merkle_parent_node() {
             100, 149, 65, 101, 59, 11, 239, 93, 150, 126, 33, 11,
         ];
 
-        const INDEX1: u32 = 2_u32.pow(20) - 1;
+        const INDEX1: u64 = 2_u64.pow(20) - 1;
         const LEAF1_DATA: [u8; 32] = [
             0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
@@ -255,7 +255,7 @@ async fn test_merkle_parent_node() {
             161, 130, 32, 163, 238, 58, 18, 59, 206, 101, 225, 141, 44, 15,
         ];
 
-        const INDEX2: u32 = 2_u32.pow(20);
+        const INDEX2: u64 = 2_u64.pow(20);
         const LEAF2_DATA: [u8; 32] = [
             0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
@@ -266,7 +266,7 @@ async fn test_merkle_parent_node() {
             246, 213, 197, 176, 39, 245, 64, 103, 6, 30, 133, 153, 10, 38,
         ];
 
-        const PARENT_INDEX: u32 = 2_u32.pow(19) - 1;
+        const PARENT_INDEX: u64 = 2_u64.pow(19) - 1;
 
         // 1
         assert_eq!(get_root(client).await.root.as_slice(), DEFAULT_ROOT_HASH);

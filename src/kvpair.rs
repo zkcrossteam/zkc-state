@@ -26,7 +26,7 @@ use serde::{
 use tonic::transport::Channel;
 use tonic::{Request, Status};
 
-pub const MERKLE_TREE_HEIGHT: usize = 20;
+pub const MERKLE_TREE_HEIGHT: usize = 32;
 
 // In default_hash vec, it is from leaf to root.
 // For example, height of merkle tree is 20.
@@ -159,7 +159,7 @@ impl Hash {
         } else {
             Err(MerkleError::new(
                 [0; 32].into(),
-                depth as u32,
+                depth as u64,
                 MerkleErrorCode::InvalidDepth,
             ))
         }
@@ -219,6 +219,31 @@ impl From<[u8; 32]> for LeafData {
     }
 }
 
+pub fn deserialize_u64_as_binary<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Bson::deserialize(deserializer) {
+        Ok(Bson::Binary(bytes)) => Ok({
+            let c: [u8; 8] = bytes.bytes.try_into().unwrap();
+            u64::from_le_bytes(c)
+        }),
+        Ok(..) => Err(SerdeError::invalid_value(Unexpected::Enum, &"Bson::Binary")),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn serialize_u64_as_binary<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let binary = Bson::Binary(mongodb::bson::Binary {
+        subtype: BinarySubtype::Generic,
+        bytes: value.to_le_bytes().to_vec(),
+    });
+    binary.serialize(serializer)
+}
+
 fn deserialize_u256_as_binary<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
 where
     D: Deserializer<'de>,
@@ -241,6 +266,13 @@ where
     binary.serialize(serializer)
 }
 
+pub fn u64_to_bson(x: u64) -> Bson {
+    Bson::Binary(mongodb::bson::Binary {
+        subtype: BinarySubtype::Generic,
+        bytes: x.to_le_bytes().to_vec(),
+    })
+}
+
 pub fn hash_to_bson(x: &Hash) -> Bson {
     Bson::Binary(mongodb::bson::Binary {
         subtype: BinarySubtype::Generic,
@@ -257,7 +289,7 @@ pub struct MongoMerkle {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq)]
 pub struct MerkleRecord {
-    pub index: u32,
+    pub index: u64,
     pub hash: Hash,
     pub left: Hash,
     pub right: Hash,
@@ -343,7 +375,7 @@ impl TryFrom<MerkleRecord> for Node {
 }
 
 impl MerkleNode<Hash> for MerkleRecord {
-    fn index(&self) -> u32 {
+    fn index(&self) -> u64 {
         self.index
     }
     fn hash(&self) -> Hash {
@@ -363,7 +395,7 @@ impl MerkleNode<Hash> for MerkleRecord {
 }
 
 impl MerkleRecord {
-    pub fn new(index: u32) -> Self {
+    pub fn new(index: u64) -> Self {
         MerkleRecord {
             index,
             hash: [0; 32].into(),
@@ -373,14 +405,14 @@ impl MerkleRecord {
         }
     }
 
-    pub fn new_leaf(index: u32, data: impl Into<LeafData>) -> Self {
+    pub fn new_leaf(index: u64, data: impl Into<LeafData>) -> Self {
         let mut record = MerkleRecord::new(index);
         record.data = data.into();
         record.hash = Hash::hash_data(&record.data);
         record
     }
 
-    pub fn new_non_leaf(index: u32, left: impl Into<Hash>, right: impl Into<Hash>) -> Self {
+    pub fn new_non_leaf(index: u64, left: impl Into<Hash>, right: impl Into<Hash>) -> Self {
         let mut record = MerkleRecord::new(index);
         record.left = left.into();
         record.right = right.into();
@@ -405,7 +437,7 @@ impl MerkleRecord {
         ]
     }
 
-    pub fn get_default_record(index: u32) -> Result<Self, MerkleError> {
+    pub fn get_default_record(index: u64) -> Result<Self, MerkleError> {
         let height = (index + 1).ilog2() as usize;
         let default = Hash::get_default_hash(height)?;
         let child_hash = if height == MERKLE_TREE_HEIGHT {
@@ -433,9 +465,9 @@ impl MongoMerkle {
     }
 
     pub fn height() -> usize {
-        MERKLE_TREE_HEIGHT
+        20
     }
-    fn empty_leaf(index: u32) -> MerkleRecord {
+    fn empty_leaf(index: u64) -> MerkleRecord {
         let mut leaf = MerkleRecord::new(index);
         leaf.set([0; 32].as_ref());
         leaf
@@ -475,7 +507,7 @@ impl MongoMerkle {
 
     pub async fn get_leaf(
         &mut self,
-        index: u32,
+        index: u64,
         hash: Option<Hash>,
         proof_type: ProofType,
     ) -> Result<GetLeafResponse, Status> {
@@ -495,7 +527,7 @@ impl MongoMerkle {
 
     pub async fn set_leaf(
         &mut self,
-        index: u32,
+        index: u64,
         leaf_data: LeafData,
         proof_type: ProofType,
     ) -> Result<SetLeafResponse, Status> {
@@ -517,7 +549,7 @@ impl MongoMerkle {
 
     pub async fn get_non_leaf(
         &mut self,
-        index: u32,
+        index: u64,
         hash: Hash,
     ) -> Result<GetNonLeafResponse, Status> {
         let response = self
@@ -535,7 +567,7 @@ impl MongoMerkle {
 
     pub async fn set_non_leaf(
         &mut self,
-        index: u32,
+        index: u64,
         hash: Option<Hash>,
         left: Hash,
         right: Hash,
@@ -585,7 +617,7 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
 
     fn set_parent(
         &mut self,
-        index: u32,
+        index: u64,
         hash: &Hash,
         left: &Hash,
         right: &Hash,
@@ -599,7 +631,7 @@ impl MerkleTree<Hash, 20> for MongoMerkle {
         Ok(())
     }
 
-    fn get_node_with_hash(&mut self, index: u32, hash: &Hash) -> Result<Self::Node, MerkleError> {
+    fn get_node_with_hash(&mut self, index: u64, hash: &Hash) -> Result<Self::Node, MerkleError> {
         let node_type = get_node_type(index, MERKLE_TREE_HEIGHT);
         let node = if node_type == NodeType::NodeLeaf {
             executor::block_on(self.get_leaf(index, Some(*hash), ProofType::ProofEmpty))
@@ -649,10 +681,10 @@ mod tests {
     #[test]
     /* Test for check parent node
      * 1. Clear m tree collection. Create default empty m tree. Check root.
-     * 2. Update index=2_u32.pow(20) - 1 (first leaf) leave value.
-     * 3. Update index=2_u32.pow(20) (second leaf) leave value.
-     * 4. Get index=2_u32.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
-     * 5. Load mt from DB and Get index=2_u32.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
+     * 2. Update index=2_u64.pow(20) - 1 (first leaf) leave value.
+     * 3. Update index=2_u64.pow(20) (second leaf) leave value.
+     * 4. Get index=2_u64.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
+     * 5. Load mt from DB and Get index=2_u64.pow(19) - 1 node with hash and confirm the left and right are previous set leaves.
      */
     fn test_mongo_merkle_parent_node() {
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -673,7 +705,7 @@ mod tests {
             802061392934800187,
         ];
 
-        const INDEX1: u32 = 2_u32.pow(20) - 1;
+        const INDEX1: u64 = 2_u64.pow(20) - 1;
         const LEAF1_DATA: [u8; 32] = [
             0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
@@ -689,7 +721,7 @@ mod tests {
             1093404808759360274,
         ];
 
-        const INDEX2: u32 = 2_u32.pow(20);
+        const INDEX2: u64 = 2_u64.pow(20);
         const LEAF2_DATA: [u8; 32] = [
             0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
@@ -706,11 +738,10 @@ mod tests {
             2741172120221804352,
         ];
 
-        const PARENT_INDEX: u32 = 2_u32.pow(19) - 1;
+        const PARENT_INDEX: u64 = 2_u64.pow(19) - 1;
 
         // 1
-        let mut mt =
-            MongoMerkle::construct(test_addr.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+        let mut mt = MongoMerkle::construct(test_addr.into(), DEFAULT_HASH_VEC[20]);
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -776,8 +807,8 @@ mod tests {
     #[test]
     /* Basic tests for 20 height m tree
      * 1. Clear m tree collection. Create default empty m tree. Check root.
-     * 2. Update index=2_u32.pow(20) - 1 (first leaf) leave value. Check root.
-     * 3. Check index=2_u32.pow(20) - 1 leave value updated.
+     * 2. Update index=2_u64.pow(20) - 1 (first leaf) leave value. Check root.
+     * 3. Check index=2_u64.pow(20) - 1 leave value updated.
      * 4. Load m tree from DB, check root and leave value.
      */
     fn test_mongo_merkle_single_leaf_update() {
@@ -798,7 +829,7 @@ mod tests {
             802061392934800187,
         ];
 
-        const INDEX1: u32 = 2_u32.pow(20) - 1;
+        const INDEX1: u64 = 2_u64.pow(20) - 1;
         const LEAF1_DATA: [u8; 32] = [
             0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
@@ -815,8 +846,7 @@ mod tests {
         ];
 
         // 1
-        let mut mt =
-            MongoMerkle::construct(test_addr.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+        let mut mt = MongoMerkle::construct(test_addr.into(), DEFAULT_HASH_VEC[20]);
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -857,9 +887,9 @@ mod tests {
     #[test]
     /* Tests for 20 height m tree with updating multple leaves
      * 1. Clear m tree collection. Create default empty m tree. Check root (default one, A).
-     * 2. Update index=2_u32.pow(20) - 1 (first leaf) leave value. Check root (1 leave updated, B). Check index=2_u32.pow(20) - 1 leave value updated.
-     * 3. Update index=2_u32.pow(20) (second leaf) leave value. Check root (1 leave updated, C). Check index=2_u32.pow(20) leave value updated.
-     * 4. Update index=2_u32.pow(21) - 2 (last leaf) leave value. Check root (1 leave updated, D). Check index=2_u32.pow(21) -2 leave value updated.
+     * 2. Update index=2_u64.pow(20) - 1 (first leaf) leave value. Check root (1 leave updated, B). Check index=2_u64.pow(20) - 1 leave value updated.
+     * 3. Update index=2_u64.pow(20) (second leaf) leave value. Check root (1 leave updated, C). Check index=2_u64.pow(20) leave value updated.
+     * 4. Update index=2_u64.pow(21) - 2 (last leaf) leave value. Check root (1 leave updated, D). Check index=2_u64.pow(21) -2 leave value updated.
      * 5. Load m tree from DB with D root hash, check root and leaves' values.
      */
     fn test_mongo_merkle_multi_leaves_update() {
@@ -880,7 +910,7 @@ mod tests {
             802061392934800187,
         ];
 
-        const INDEX1: u32 = 2_u32.pow(20) - 1;
+        const INDEX1: u64 = 2_u64.pow(20) - 1;
         const LEAF1_DATA: [u8; 32] = [
             0, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
@@ -896,7 +926,7 @@ mod tests {
             1093404808759360274,
         ];
 
-        const INDEX2: u32 = 2_u32.pow(20);
+        const INDEX2: u64 = 2_u64.pow(20);
         const LEAF2_DATA: [u8; 32] = [
             0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
@@ -912,7 +942,7 @@ mod tests {
             2741172120221804352,
         ];
 
-        const INDEX3: u32 = 2_u32.pow(21) - 2;
+        const INDEX3: u64 = 2_u64.pow(21) - 2;
         const LEAF3_DATA: [u8; 32] = [
             18, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0,
@@ -929,8 +959,7 @@ mod tests {
         ];
 
         // 1
-        let mut mt =
-            MongoMerkle::construct(test_addr.into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
+        let mut mt = MongoMerkle::construct(test_addr.into(), DEFAULT_HASH_VEC[20]);
         let root = mt.get_root_hash();
         let root64 = root
             .0
@@ -1018,9 +1047,8 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let _enter = rt.enter();
 
-        let mut mt =
-            MongoMerkle::construct([0; 32].into(), DEFAULT_HASH_VEC[MongoMerkle::height()]);
-        let (mut leaf, _) = mt.get_leaf_with_proof(2_u32.pow(20) - 1).unwrap();
+        let mut mt = MongoMerkle::construct([0; 32].into(), DEFAULT_HASH_VEC[20]);
+        let (mut leaf, _) = mt.get_leaf_with_proof(2_u64.pow(20) - 1).unwrap();
         leaf.set([1u8; 32].as_ref());
         mt.set_leaf_with_proof(&leaf).unwrap();
         let _root = mt.get_root_hash();

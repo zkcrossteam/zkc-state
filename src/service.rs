@@ -4,7 +4,7 @@ use crate::kvpair::{LeafData, MERKLE_TREE_HEIGHT};
 use crate::merkle::{get_offset, get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof};
 use crate::Error;
 
-use super::kvpair::{hash_to_bson, ContractId, Hash, MerkleRecord};
+use super::kvpair::{hash_to_bson, u64_to_bson, ContractId, Hash, MerkleRecord};
 use mongodb::bson::{doc, to_bson, Document};
 use mongodb::error::{TRANSIENT_TRANSACTION_ERROR, UNKNOWN_TRANSACTION_COMMIT_RESULT};
 use mongodb::options::{
@@ -179,11 +179,11 @@ impl MongoCollection<MerkleRecord> {
 
     pub async fn get_merkle_record(
         &mut self,
-        index: u32,
+        index: u64,
         hash: &Hash,
     ) -> Result<Option<MerkleRecord>, Error> {
         let mut filter = doc! {};
-        filter.insert("index", index);
+        filter.insert("index", u64_to_bson(index));
         filter.insert("hash", hash_to_bson(hash));
         let record = self.find_one(filter, None).await?;
         if record.is_some() {
@@ -194,7 +194,7 @@ impl MongoCollection<MerkleRecord> {
 
     pub async fn must_get_merkle_record(
         &mut self,
-        index: u32,
+        index: u64,
         hash: &Hash,
     ) -> Result<MerkleRecord, Error> {
         let record = self.get_merkle_record(index, hash).await?;
@@ -221,7 +221,7 @@ impl MongoCollection<MerkleRecord> {
         record: &MerkleRecord,
     ) -> Result<MerkleRecord, Error> {
         let mut filter = doc! {};
-        filter.insert("index", record.index);
+        filter.insert("index", u64_to_bson(record.index));
         filter.insert("hash", hash_to_bson(&record.hash));
         let exists = self.find_one(filter, None).await?;
         exists.map_or(
@@ -239,7 +239,7 @@ impl MongoCollection<MerkleRecord> {
 
     pub async fn insert_leaf_node(
         &mut self,
-        index: u32,
+        index: u64,
         data: &LeafData,
     ) -> Result<MerkleRecord, Error> {
         let record = MerkleRecord::new_leaf(index, *data);
@@ -248,7 +248,7 @@ impl MongoCollection<MerkleRecord> {
 
     pub async fn insert_non_leaf_node(
         &mut self,
-        index: u32,
+        index: u64,
         left: Hash,
         right: Hash,
     ) -> Result<MerkleRecord, Error> {
@@ -281,7 +281,7 @@ impl MongoCollection<MerkleRecord> {
 
     pub async fn get_leaf_and_proof(
         &mut self,
-        index: u32,
+        index: u64,
     ) -> Result<(MerkleRecord, MerkleProof<Hash, MERKLE_TREE_HEIGHT>), Error> {
         leaf_check(index, MERKLE_TREE_HEIGHT)?;
         let paths = get_path(index, MERKLE_TREE_HEIGHT)?;

@@ -17,7 +17,7 @@ enum NodeType {
 }
 
 message Node {
-  uint32 index = 1;
+  uint64 index = 1;
   bytes hash = 2;
   NodeType node_type = 3;
   oneof node_data {
@@ -53,7 +53,7 @@ message SetRootResponse { bytes root = 1; }
 
 message GetLeafRequest {
   optional bytes contract_id = 1;
-  uint32 index = 2;
+  uint64 index = 2;
   optional bytes hash = 3;
   ProofType proof_type = 4;
 }
@@ -65,7 +65,7 @@ message GetLeafResponse {
 
 message GetNonLeafRequest {
   optional bytes contract_id = 1;
-  uint32 index = 2;
+  uint64 index = 2;
   bytes hash = 3;
 }
 
@@ -73,7 +73,7 @@ message GetNonLeafResponse { Node node = 1; }
 
 message SetLeafRequest {
   optional bytes contract_id = 1;
-  uint32 index = 2;
+  uint64 index = 2;
   bytes leaf_data = 3;
   ProofType proof_type = 4;
 }
@@ -85,7 +85,7 @@ message SetLeafResponse {
 
 message SetNonLeafRequest {
   optional bytes contract_id = 1;
-  uint32 index = 2;
+  uint64 index = 2;
   optional bytes hash = 3;
   bytes left_child_hash = 4;
   bytes right_child_hash = 5;

@@ -22,7 +22,7 @@ Refer to [Introduction to gRPC](https://grpc.io/docs/what-is-grpc/introduction/)
 [Language Guide (proto 3)](https://protobuf.dev/programming-guides/proto3/) for a comprehensive reference of protobuf file format.
 
 ## Merkle tree convention
-The height of the Merkle tree we are using is currently hard coded to be 20. Pictorially the indexes of its nodes are laballed as follows.
+The height of the Merkle tree we are using is currently hard coded to be 32. Pictorially the indexes of its nodes are laballed as follows.
 
 ```
 0
@@ -32,11 +32,11 @@ The height of the Merkle tree we are using is currently hard coded to be 20. Pic
 ...
 ...
 ...
-2^20-1 2^20 ... 2^21-2
+2^32-1 2^32 ... 2^33-2
 ```
 Here the top level index `0` represents the Merkle tree root, and the numbers `1` and `2` below it are the indexes of its left and right children.
 Other none-leaf nodes are labelled in the same vein. The numbers in the lowest level are the indexes of the leaves.
-There are `2^20` leaves in total. The first leave uses the index `2^20-1 = 1048575`, while the latest leave has index `2^21-2 =2097150`.
+There are `2^32` leaves in total. The first leave uses the index `2^32-1`, while the latest leave has index `2^33-2`.
 
 ## gRPC
 We have enabled [gRPC server reflection](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md) to make it more
@@ -175,7 +175,7 @@ returns
 let address = self.address.rules[0].u64_value().unwrap() as u32;
 let index = (address as u32) + (1u32<<MERKLE_TREE_HEIGHT) - 1;
 ```
-So if a address is 0x19281, then index = 0x19281 + (1u32<<20) - 1 = 1152511.
+So if a address is 0x19281, then index = 0x19281 + (1u32<<32) - 1.
 
 ## How to calculate leaf data manually
 Leaf data must be a uint8[32] array, the below command can be used to convert between base64 value and uint[32] array.
