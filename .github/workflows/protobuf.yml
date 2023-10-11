@@ -2,21 +2,21 @@ on: [push, pull_request]
 
 name: Check protobuf
 
-env:
-  PROTOC_VERSION: "23.4"
-
 jobs:
   check:
     name: Check protobuf definitions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: arduino/setup-protoc@v2
+      - name: Install nix
+        uses: cachix/install-nix-action@v23
         with:
-          version: "${{ env.PROTOC_VERSION }}"
+          extra_nix_config: |
+            experimental-features = nix-command flakes
       - run: |
           set -xeuo pipefail
-          ./scripts/update_protos.sh
+          nix develop -c protoc --version
+          nix develop -c ./scripts/update_protos.sh
           if ! git diff --exit-code; then
             echo "Protobuf files in a inconsistent state"
             echo "Install protoc from https://github.com/protocolbuffers/protobuf/releases/tag/v${{ env.PROTOC_VERSION }}"
