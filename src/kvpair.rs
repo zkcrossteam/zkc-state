@@ -484,19 +484,12 @@ impl MongoMerkle {
         Ok(response.into_inner())
     }
 
-    pub async fn set_root(
-        &mut self,
-        hash: Option<Hash>,
-        left: Hash,
-        right: Hash,
-    ) -> Result<SetRootResponse, Status> {
+    pub async fn set_root(&mut self, hash: Hash) -> Result<SetRootResponse, Status> {
         let response = self
             .client
             .set_root(Request::new(SetRootRequest {
-                hash: hash.map(|x| x.into()),
-                left_child_hash: left.into(),
-                right_child_hash: right.into(),
                 contract_id: Some(self.contract_id.into()),
+                hash: hash.into(),
             }))
             .await?;
         dbg!(&response);

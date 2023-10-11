@@ -44,9 +44,7 @@ message GetRootResponse { bytes root = 1; }
 
 message SetRootRequest {
   optional bytes contract_id = 1;
-  optional bytes hash = 2;
-  bytes left_child_hash = 3;
-  bytes right_child_hash = 4;
+  bytes hash = 2;
 }
 
 message SetRootResponse { bytes root = 1; }
@@ -127,5 +125,3 @@ service KVPair {
     };
   }
 }
-
-

@@ -490,14 +490,10 @@ impl KvPair for MongoKvPair {
         let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
         let request = request.into_inner();
         let mut collection = self.new_collection(&contract_id, false).await?;
-        let left: Hash = request.left_child_hash.as_slice().try_into()?;
-        let right: Hash = request.right_child_hash.as_slice().try_into()?;
-        if let Some(hash) = request.hash {
-            Hash::validate_children(&hash.as_slice().try_into()?, &left, &right)?;
-        }
-        let record = MerkleRecord::new_root(left, right);
-        let record = collection.update_root_merkle_record(&record).await?;
+        let hash: Hash = request.hash.as_slice().try_into()?;
+        let record = collection.must_get_merkle_record(0, &hash).await?;
         dbg!(&record);
+        collection.update_root_merkle_record(&record).await?;
         Ok(Response::new(SetRootResponse {
             root: record.hash.into(),
         }))
