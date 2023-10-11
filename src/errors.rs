@@ -7,7 +7,7 @@ use crate::merkle::MerkleError;
 pub enum Error {
     #[error("Mongodb error: {0}")]
     Mongodb(#[from] mongodb::error::Error),
-    #[error("Merkel tree error: {0:?}")]
+    #[error("Merkle tree error: {0:?}")]
     Merkle(#[from] MerkleError),
     #[error("Invalid argument: {0}")]
     InvalidArgument(String),

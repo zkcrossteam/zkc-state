@@ -267,10 +267,9 @@ where
 }
 
 pub fn u64_to_bson(x: u64) -> Bson {
-    Bson::Binary(mongodb::bson::Binary {
-        subtype: BinarySubtype::Generic,
-        bytes: x.to_le_bytes().to_vec(),
-    })
+    mongodb::bson::ser::Serializer::new()
+        .serialize_u64(x)
+        .unwrap()
 }
 
 pub fn hash_to_bson(x: &Hash) -> Bson {

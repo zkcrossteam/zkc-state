@@ -291,11 +291,12 @@ impl MongoCollection<MerkleRecord> {
         let root_hash = acc_node.hash;
         let mut assist = Vec::with_capacity(MERKLE_TREE_HEIGHT);
         for child in paths {
-            let (hash, sibling_hash) = if (acc + 1) * 2 == child + 1 {
-                // left child
+            let is_left_child = (acc + 1) * 2 == child + 1;
+            let is_right_child = (acc + 1) * 2 == child;
+            assert!(is_left_child || is_right_child);
+            let (hash, sibling_hash) = if is_left_child {
                 (acc_node.left().unwrap(), acc_node.right().unwrap())
             } else {
-                assert!((acc + 1) * 2 == child);
                 (acc_node.right().unwrap(), acc_node.left().unwrap())
             };
             let sibling = get_sibling_index(child);
