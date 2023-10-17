@@ -46,7 +46,7 @@ lazy_static::lazy_static! {
 #[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct ContractId(
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
-    #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_u256_from_binary")]
     pub [u8; 32],
 );
 
@@ -91,7 +91,7 @@ impl From<[u8; 32]> for ContractId {
 #[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct Hash(
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
-    #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_u256_from_binary")]
     pub [u8; 32],
 );
 
@@ -190,7 +190,7 @@ impl Hash {
 #[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct LeafData(
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
-    #[serde(deserialize_with = "self::deserialize_u256_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_u256_from_binary")]
     pub [u8; 32],
 );
 
@@ -244,7 +244,7 @@ where
     binary.serialize(serializer)
 }
 
-fn deserialize_u256_as_binary<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
+pub fn deserialize_u256_from_binary<'de, D>(deserializer: D) -> Result<[u8; 32], D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -264,6 +264,17 @@ where
         bytes: bytes.into(),
     });
     binary.serialize(serializer)
+}
+
+pub fn deserialize_bytes_from_binary<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Bson::deserialize(deserializer) {
+        Ok(Bson::Binary(bytes)) => Ok(bytes.bytes.to_vec()),
+        Ok(..) => Err(SerdeError::invalid_value(Unexpected::Enum, &"Bson::Binary")),
+        Err(e) => Err(e),
+    }
 }
 
 pub fn u64_to_bson(x: u64) -> Bson {
@@ -452,6 +463,14 @@ impl MerkleRecord {
             right: child_hash,
         })
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub struct DataHashRecord {
+    pub hash: Hash,
+    #[serde(serialize_with = "self::serialize_bytes_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_bytes_from_binary")]
+    pub data: Vec<u8>,
 }
 
 impl MongoMerkle {

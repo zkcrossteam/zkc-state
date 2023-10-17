@@ -4,7 +4,7 @@ use crate::kvpair::{LeafData, MERKLE_TREE_HEIGHT};
 use crate::merkle::{get_offset, get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof};
 use crate::Error;
 
-use super::kvpair::{hash_to_bson, u64_to_bson, ContractId, Hash, MerkleRecord};
+use super::kvpair::{hash_to_bson, u64_to_bson, ContractId, DataHashRecord, Hash, MerkleRecord};
 use mongodb::bson::{doc, to_bson, Document};
 use mongodb::error::{TRANSIENT_TRANSACTION_ERROR, UNKNOWN_TRANSACTION_COMMIT_RESULT};
 use mongodb::options::{
@@ -32,18 +32,23 @@ pub struct MongoKvPair {
 }
 
 #[derive(Debug)]
-pub struct MongoCollection<T> {
+pub struct MongoCollection<T, R> {
     merkle_collection: Collection<T>,
+    datahash_collection: Collection<R>,
     session: Option<ClientSession>,
 }
 
-impl<T> MongoCollection<T> {
+impl<T, R> MongoCollection<T, R> {
     fn get_database_name() -> String {
         "zkwasmkvpair".to_string()
     }
 
     fn get_merkle_collection_name(contract_id: &ContractId) -> String {
         format!("MERKLEDATA_{}", hex::encode(contract_id.0))
+    }
+
+    fn get_data_collection_name(contract_id: &ContractId) -> String {
+        format!("DATAHASH_{}", hex::encode(contract_id.0))
     }
 
     pub async fn new(
@@ -63,10 +68,13 @@ impl<T> MongoCollection<T> {
             None
         };
         let database = client.clone().database(Self::get_database_name().as_str());
-        let collection_name = Self::get_merkle_collection_name(contract_id);
-        let merkle_collection = database.collection::<T>(collection_name.as_str());
+        let merkle_collection_name = Self::get_merkle_collection_name(contract_id);
+        let merkle_collection = database.collection::<T>(merkle_collection_name.as_str());
+        let data_collection_name = Self::get_data_collection_name(contract_id);
+        let data_collection = database.collection::<R>(data_collection_name.as_str());
         Ok(Self {
             merkle_collection,
+            datahash_collection: data_collection,
             session,
         })
     }
@@ -96,18 +104,19 @@ impl<T> MongoCollection<T> {
 
     pub async fn drop(&self) -> Result<(), mongodb::error::Error> {
         let options = mongodb::options::DropCollectionOptions::builder().build();
-        self.merkle_collection.drop(options).await?;
+        self.merkle_collection.drop(options.clone()).await?;
+        self.datahash_collection.drop(options).await?;
         Ok(())
     }
 }
 
-impl MongoCollection<MerkleRecord> {
+impl MongoCollection<MerkleRecord, DataHashRecord> {
     // Special ObjectId to track current root.
     pub fn get_current_root_object_id() -> mongodb::bson::oid::ObjectId {
         mongodb::bson::oid::ObjectId::from_bytes([0; 12])
     }
 
-    pub async fn find_one(
+    pub async fn find_one_merkle_record(
         &mut self,
         filter: impl Into<Option<Document>>,
         options: impl Into<Option<FindOneOptions>>,
@@ -123,7 +132,7 @@ impl MongoCollection<MerkleRecord> {
         Ok(result)
     }
 
-    pub async fn insert_one(
+    pub async fn insert_one_merkle_record(
         &mut self,
         doc: impl Borrow<MerkleRecord>,
         options: impl Into<Option<InsertOneOptions>>,
@@ -139,7 +148,7 @@ impl MongoCollection<MerkleRecord> {
         Ok(result)
     }
 
-    pub async fn replace_one(
+    pub async fn replace_one_merkle_record(
         &mut self,
         query: Document,
         replacement: impl Borrow<MerkleRecord>,
@@ -160,7 +169,7 @@ impl MongoCollection<MerkleRecord> {
         Ok(result)
     }
 
-    pub async fn update_one(
+    pub async fn update_one_merkle_record(
         &mut self,
         query: Document,
         update: impl Into<UpdateModifications>,
@@ -189,7 +198,7 @@ impl MongoCollection<MerkleRecord> {
         let mut filter = doc! {};
         filter.insert("index", u64_to_bson(index));
         filter.insert("hash", hash_to_bson(hash));
-        let record = self.find_one(filter, None).await?;
+        let record = self.find_one_merkle_record(filter, None).await?;
         if record.is_some() {
             return Ok(record);
         }
@@ -207,7 +216,7 @@ impl MongoCollection<MerkleRecord> {
 
     pub async fn get_root_merkle_record(&mut self) -> Result<Option<MerkleRecord>, Error> {
         let filter = doc! {"_id": Self::get_current_root_object_id()};
-        let record = self.find_one(filter, None).await?;
+        let record = self.find_one_merkle_record(filter, None).await?;
         dbg!(record);
         if record.is_some() {
             return Ok(record);
@@ -227,10 +236,10 @@ impl MongoCollection<MerkleRecord> {
         let mut filter = doc! {};
         filter.insert("index", u64_to_bson(record.index));
         filter.insert("hash", hash_to_bson(&record.hash));
-        let exists = self.find_one(filter, None).await?;
+        let exists = self.find_one_merkle_record(filter, None).await?;
         exists.map_or(
             {
-                let result = self.insert_one(record, None).await?;
+                let result = self.insert_one_merkle_record(record, None).await?;
                 dbg!(record, &result);
                 Ok(*record)
             },
@@ -278,7 +287,9 @@ impl MongoCollection<MerkleRecord> {
             },
         };
         let options = UpdateOptions::builder().upsert(true).build();
-        let result = self.update_one(filter, update, options).await?;
+        let result = self
+            .update_one_merkle_record(filter, update, options)
+            .await?;
         dbg!(&result);
         Ok(*record)
     }
@@ -351,6 +362,58 @@ impl MongoCollection<MerkleRecord> {
         }
         Ok(proof)
     }
+
+    pub async fn find_one_datahash_record(
+        &mut self,
+        filter: impl Into<Option<Document>>,
+        options: impl Into<Option<FindOneOptions>>,
+    ) -> Result<Option<DataHashRecord>, mongodb::error::Error> {
+        let result = match self.session.as_mut() {
+            Some(session) => {
+                self.datahash_collection
+                    .find_one_with_session(filter, options, session)
+                    .await?
+            }
+            _ => self.datahash_collection.find_one(filter, options).await?,
+        };
+        Ok(result)
+    }
+
+    pub async fn insert_one_datahash_record(
+        &mut self,
+        doc: impl Borrow<DataHashRecord>,
+        options: impl Into<Option<InsertOneOptions>>,
+    ) -> Result<InsertOneResult, mongodb::error::Error> {
+        let result = match self.session.as_mut() {
+            Some(session) => {
+                self.datahash_collection
+                    .insert_one_with_session(doc, options, session)
+                    .await?
+            }
+            _ => self.datahash_collection.insert_one(doc, options).await?,
+        };
+        Ok(result)
+    }
+
+    pub async fn insert_datahash_record(
+        &mut self,
+        record: &DataHashRecord,
+    ) -> Result<DataHashRecord, Error> {
+        let mut filter = doc! {};
+        filter.insert("hash", hash_to_bson(&record.hash));
+        let exists = self.find_one_datahash_record(filter, None).await?;
+        exists.map_or(
+            {
+                let result = self.insert_one_datahash_record(record, None).await?;
+                dbg!(&record, &result);
+                Ok(record.clone())
+            },
+            |record| {
+                //println!("find existing node, preventing duplicate");
+                Ok(record.clone())
+            },
+        )
+    }
 }
 
 impl MongoKvPair {
@@ -362,7 +425,7 @@ impl MongoKvPair {
         let _ = client
             .list_database_names(
                 doc! {
-                    "name": MongoCollection::<String>::get_database_name(),
+                    "name": MongoCollection::<(), ()>::get_database_name(),
                 },
                 None,
             )
@@ -384,18 +447,18 @@ impl MongoKvPair {
         }
     }
 
-    pub async fn new_collection<T>(
+    pub async fn new_collection<T, R>(
         &self,
         contract_id: &ContractId,
         with_session: bool,
-    ) -> Result<MongoCollection<T>, Error> {
+    ) -> Result<MongoCollection<T, R>, Error> {
         Ok(MongoCollection::new(self.client.clone(), contract_id, with_session).await?)
     }
 
     pub async fn drop_test_collection(&self) -> Result<(), Error> {
         if let Some(test_config) = &self.test_config {
             let collection = self
-                .new_collection::<MerkleRecord>(&test_config.contract_id, false)
+                .new_collection::<MerkleRecord, DataHashRecord>(&test_config.contract_id, false)
                 .await?;
             collection.drop().await?;
         }
