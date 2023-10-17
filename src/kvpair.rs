@@ -554,7 +554,9 @@ impl MongoMerkle {
             .client
             .set_leaf(Request::new(SetLeafRequest {
                 index,
-                leaf_data_hash,
+                leaf_data_hash: Some(leaf_data_hash),
+                leaf_data: None,
+                leaf_data_for_hashing: None,
                 proof_type,
                 contract_id: Some(self.contract_id.into()),
             }))

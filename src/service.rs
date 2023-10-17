@@ -625,8 +625,29 @@ impl KvPair for MongoKvPair {
         // TODO: Should use session here
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
-        let leaf_data: LeafDataHash = request.leaf_data_hash.as_slice().try_into()?;
-        let record = MerkleRecord::new_leaf(index, leaf_data);
+        let leaf_data_hash: LeafDataHash =
+            match (request.leaf_data_hash, request.leaf_data_for_hashing) {
+                (Some(leaf_data_hash), Some(data))
+                    if &crate::poseidon::hash(&data)?[..] != leaf_data_hash =>
+                {
+                    return Err(Status::invalid_argument(
+                        "Inconsistent leaf data for hashing and leaf data hash",
+                    ));
+                }
+                (Some(leaf_data_hash), _) => leaf_data_hash.as_slice().try_into()?,
+                (None, Some(data)) => crate::poseidon::hash(&data)?.as_slice().try_into()?,
+                (None, None) => {
+                    return Err(Status::invalid_argument(
+                        "Leaf data for hashing or leaf data hash must be given",
+                    ))
+                }
+            };
+        if let Some(data) = request.leaf_data {
+            let hash = leaf_data_hash.0.into();
+            let record = DataHashRecord { hash, data };
+            collection.insert_datahash_record(&record).await?;
+        }
+        let record = MerkleRecord::new_leaf(index, leaf_data_hash);
         let proof = collection.set_leaf_and_get_proof(&record).await?;
         let proof = if request.proof_type == ProofType::ProofV0 as i32 {
             Some(Proof {
