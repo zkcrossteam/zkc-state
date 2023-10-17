@@ -91,30 +91,6 @@ message SetNonLeafRequest {
 
 message SetNonLeafResponse { Node node = 1; }
 
-message PoseidonHashRequest {
-  optional bytes contract_id = 1;
-  // The original data that we want to hash, may be any binary data.
-  // May be different from the data we actually used to hash.
-  // See description below.
-  optional bytes data = 2;
-  // Because the original data we want to hash can be any binary data,
-  // it may not be a valid input to the poseidon hash function
-  // (which takes an array of field elements as input), we may need to
-  // pad or modify the original data to hash it. This parameter is the transformed
-  // data which can be feeded into poseidon hash function directly.
-  // As the way of transforming the of original data is non-standard,
-  // the caller MUST pass the transformed data here. It is guarenteed
-  // that the hash returned here is stable.
-  optional bytes data_to_hash = 3;
-  // Whether to persist the data and data hash to the database.
-  // This is useful when laterly we want to look up the data from the data hash.
-  bool persist = 4;
-}
-
-message PoseidonHashResponse {
-  bytes hash = 1;
-}
-
 service KVPair {
   rpc GetRoot(GetRootRequest) returns (GetRootResponse) {
     option (google.api.http) = {
@@ -150,11 +126,74 @@ service KVPair {
   }
 }
 
-// Just zkWasm-host-circuits with little changes
+message MerkleGetRootRequest { optional bytes contract_id = 1; }
+
+message MerkleGetRootResponse { bytes root = 1; }
+
+message MerkleSetRootRequest {
+  optional bytes contract_id = 1;
+  bytes root = 1;
+}
+
+message MerkleSetRootResponse { bytes root = 1; }
+
+message PoseidonHashRequest {
+  optional bytes contract_id = 1;
+  // The original data that we want to hash, may be any binary data.
+  // May be different from the data we actually used to hash.
+  // See description below.
+  optional bytes data = 2;
+  // Because the original data we want to hash can be any binary data,
+  // it may not be a valid input to the poseidon hash function
+  // (which takes an array of field elements as input), we may need to
+  // pad or modify the original data to hash it. This parameter is the
+  // transformed data which can be feeded into poseidon hash function directly.
+  // As the way of transforming the of original data is non-standard,
+  // the caller MUST pass the transformed data here. It is guarenteed
+  // that the hash returned here is stable.
+  optional bytes data_to_hash = 3;
+  // Whether to persist the data and data hash to the database.
+  // This is useful when laterly we want to look up the data from the data hash.
+  bool persist = 4;
+}
+
+message PoseidonHashResponse { bytes hash = 1; }
+
 service VanillaKVPair {
+  rpc MerkleGetRoot(MerkleGetRootRequest) returns (MerkleGetRootResponse) {
+    option (google.api.http) = {
+      get : "/v1/merkle/root"
+    };
+  }
+  rpc MerkleSetRoot(MerkleSetRootRequest) returns (MerkleSetRootResponse) {
+    option (google.api.http) = {
+      post : "/v1/merkle/root"
+    };
+  }
+  rpc MerkleGet(MerkleGetRequest) returns (MerkleGetResponse) {
+    option (google.api.http) = {
+      get : "/v1/merkle/node"
+    };
+  }
+  rpc MerkleSet(MerkleSetRequest) returns (MerkleSetResponse) {
+    option (google.api.http) = {
+      post : "/v1/merkle/node"
+    };
+  }
+  rpc MerklePutData(MerklePutDataRequest) returns (MerklePutDataResponse) {
+    option (google.api.http) = {
+      get : "/v1/merkle/data"
+    };
+  }
+  rpc MerkleFetchData(MerkleFetchDataRequest)
+      returns (MerkleFetchDataResponse) {
+    option (google.api.http) = {
+      post : "/v1/merkle/data"
+    };
+  }
   rpc PoseidonHash(PoseidonHashRequest) returns (PoseidonHashResponse) {
     option (google.api.http) = {
-      post : "/v1/poseidon"
+      post : "/v1/poseidon/hash"
     };
   }
 }

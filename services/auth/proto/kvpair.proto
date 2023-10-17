@@ -150,11 +150,40 @@ service KVPair {
   }
 }
 
-// Just zkWasm-host-circuits with little changes
 service VanillaKVPair {
+  rpc MerkleGetRoot(MerkleGetRootRequest) returns (MerkleGetRootResponse) {
+    option (google.api.http) = {
+      get : "/v1/merkle/root"
+    };
+  }
+  rpc MerkleSetRoot(MerkleSetRootRequest) returns (MerkleSetRootResponse) {
+    option (google.api.http) = {
+      post : "/v1/merkle/root"
+    };
+  }
+  rpc MerkleGet(MerkleGetRequest) returns (MerkleGetResponse) {
+    option (google.api.http) = {
+      get : "/v1/merkle/node"
+    };
+  }
+  rpc MerkleSet(MerkleSetRequest) returns (MerkleSetResponse) {
+    option (google.api.http) = {
+      post : "/v1/merkle/node"
+    };
+  }
+  rpc MerklePutData(MerklePutDataRequest) returns (MerklePutDataResponse) {
+    option (google.api.http) = {
+      get : "/v1/merkle/data"
+    };
+  }
+  rpc MerkleFetchData(MerkleFetchDataRequest) returns (MerkleFetchDataResponse) {
+    option (google.api.http) = {
+      post : "/v1/merkle/data"
+    };
+  }
   rpc PoseidonHash(PoseidonHashRequest) returns (PoseidonHashResponse) {
     option (google.api.http) = {
-      post : "/v1/poseidon"
+      post : "/v1/poseidon/hash"
     };
   }
 }
