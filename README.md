@@ -74,6 +74,43 @@ For example, when we need to set the `proof_type` field with type `ProofType` an
 }
 ```
 
+### Poseidon hash
+Say that we want to calculate the hashing of `010203040506070809101112131415161718192021222324252627282930`
+(with base64 encoding `AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkw`)
+Since `010203040506070809101112131415161718192021222324252627282930` is only 30 bytes long, we have to pad 2 bytes
+in order to represent it as a field element (which can be represented as 32 bytes). We pad 2 `0x00` in the end
+(this is just a simple example of transforming arbitary bytes into a field element, users may use any other sensible transformation).
+This data now becomes `0102030405060708091011121314151617181920212223242526272829300000`, whose
+base64 encoding is `AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwAAA=`.
+
+We can calculate the hash of `010203040506070809101112131415161718192021222324252627282930` by passing the resulting
+bytes `0102030405060708091011121314151617181920212223242526272829300000` (with two additional zeros).
+
+```bash
+curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"data":"AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkw","data_to_hash":"AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwAAA="}' "http://localhost:50000/v1/poseidon"
+```
+returns
+
+```
+{
+ "hash": "AtfHkvODAjygJDVat7Ybsc8YO39STVRx2s03E60uHBg="
+}
+```
+
+### Save data
+If the additional parameter `persist` is set to be `true` in the above API, we will also save the mapping of hash `AtfHkvODAjygJDVat7Ybsc8YO39STVRx2s03E60uHBg=`
+to the bytes `010203040506070809101112131415161718192021222324252627282930` to the database.
+```bash
+curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"data":"AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkw","data_to_hash":"AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwAAA=","persist":true}' "http://localhost:50000/v1/poseidon"
+```
+returns
+
+```
+{
+ "hash": "AtfHkvODAjygJDVat7Ybsc8YO39STVRx2s03E60uHBg="
+}
+```
+
 ### Get Merkle tree root hash
 ```bash
 curl -v "http://localhost:50000/v1/root"
@@ -137,13 +174,13 @@ returns
 
 ### Get leaf node data
 ```bash
-curl -v "http://localhost:50000/v1/leaves?index=1048575"
+curl -v "http://localhost:50000/v1/leaves?index=4294967295"
 ```
 returns
 ```
 {
  "node": {
-  "index": 1048575,
+  "index": 4294967295,
   "hash": "iktQjC9pJoboIgTSMKnMHk9sVjo387AHQoNAvHHkIRA=",
   "node_type": "NodeLeaf",
   "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
@@ -153,13 +190,13 @@ returns
 
 ### Update leaf node data
 ```bash
-curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":1048575,"leaf_data_hash":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
+curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":4294967295,"leaf_data_hash":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
 ```
 returns
 ```
 {
  "node": {
-  "index": 1048575,
+  "index": 4294967295,
   "hash": "4Nknab5e81ocyVPqxREoN9xKtLir1yJFOVc9q28WsCY=",
   "node_type": "NodeLeaf",
   "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE="
