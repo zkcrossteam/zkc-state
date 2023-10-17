@@ -2,7 +2,6 @@ use std::borrow::Borrow;
 
 use crate::kvpair::{LeafDataHash, MERKLE_TREE_HEIGHT};
 use crate::merkle::{get_offset, get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof};
-use crate::poseidon::gen_hasher;
 use crate::Error;
 
 use super::kvpair::{hash_to_bson, u64_to_bson, ContractId, DataHashRecord, Hash, MerkleRecord};
@@ -687,9 +686,6 @@ impl KvPair for MongoKvPair {
         &self,
         request: Request<PoseidonHashRequest>,
     ) -> std::result::Result<Response<PoseidonHashResponse>, Status> {
-        use ff::PrimeField;
-        use halo2_proofs::pairing::bn256::Fr;
-
         dbg!(&request);
         let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
         let request = request.into_inner();
@@ -700,29 +696,9 @@ impl KvPair for MongoKvPair {
         }
         let data = request.data.unwrap();
         let data_to_hash = request.data_to_hash.unwrap_or(data.clone());
-        if data_to_hash.len() % 32 != 0 {
-            return Err(Status::invalid_argument(
-                "Invalid data to hash, must be an array of field elements",
-            ));
-        }
-        let frs = data_to_hash
-            .chunks(32)
-            .map(|x| {
-                let v = x.try_into().unwrap();
-                let f = Fr::from_repr(v);
-                if f.is_none().into() {
-                    return Err(Status::invalid_argument(
-                        "Invalid data to hash, must be an array of field elements",
-                    ));
-                }
-                Ok(f.unwrap())
-            })
-            .collect::<Result<Vec<Fr>, _>>()?;
-        let mut hasher = gen_hasher();
-        hasher.update(&frs);
-        let hash = hasher.squeeze().to_repr().into();
+        let hash = crate::poseidon::hash(&data_to_hash)?;
         if request.persist {
-            let record = DataHashRecord::new(hash, data.clone());
+            let record = DataHashRecord::new(hash.try_into().unwrap(), data.clone());
             dbg!(&record);
             collection.insert_datahash_record(&record).await?;
         }
