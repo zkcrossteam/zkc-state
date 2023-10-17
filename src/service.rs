@@ -17,6 +17,7 @@ use mongodb::{Client, ClientSession, Collection};
 use tonic::{Request, Response, Status};
 
 use super::proto::kv_pair_server::KvPair;
+use super::proto::vanilla_kv_pair_server::VanillaKvPair;
 use super::proto::Proof;
 use super::proto::ProofType;
 use super::proto::*;
@@ -73,7 +74,6 @@ impl<T, R> MongoCollection<T, R> {
         let merkle_collection = database.collection::<T>(merkle_collection_name.as_str());
         let datahash_collection_name = Self::get_data_collection_name(contract_id);
         let datahash_collection = database.collection::<R>(datahash_collection_name.as_str());
-        dbg!(merkle_collection_name, datahash_collection_name);
         Ok(Self {
             merkle_collection,
             datahash_collection,
@@ -682,7 +682,10 @@ impl KvPair for MongoKvPair {
         dbg!(&record, &node);
         Ok(Response::new(SetNonLeafResponse { node: Some(node) }))
     }
+}
 
+#[tonic::async_trait]
+impl VanillaKvPair for MongoKvPair {
     async fn poseidon_hash(
         &self,
         request: Request<PoseidonHashRequest>,

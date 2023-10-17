@@ -5,6 +5,7 @@ use tonic::transport::Server;
 use tonic_web::GrpcWebLayer;
 use tower_http::cors::{Any, CorsLayer};
 
+use zkc_state_manager::proto::vanilla_kv_pair_server::VanillaKvPairServer;
 use zkc_state_manager::proto::{kv_pair_server::KvPairServer, FILE_DESCRIPTOR_SET};
 use zkc_state_manager::service::MongoKvPair;
 
@@ -23,7 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap();
 
     let server = MongoKvPair::new().await;
-    let server = KvPairServer::new(server);
+    let vanilla_kvpair_server = VanillaKvPairServer::new(server.clone());
+    let kvpair_server = KvPairServer::new(server.clone());
 
     println!("Server listening on {}", addr);
     let (send, recv) = oneshot::channel();
@@ -50,7 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(GrpcWebLayer::new())
         .layer(cors)
         .add_service(reflection_service)
-        .add_service(tonic_web::enable(server))
+        .add_service(tonic_web::enable(kvpair_server))
+        .add_service(tonic_web::enable(vanilla_kvpair_server))
         .serve_with_shutdown(addr, recv.map(drop))
         .await?;
 

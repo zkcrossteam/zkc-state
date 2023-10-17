@@ -5,6 +5,8 @@ use zkc_state_manager::kvpair::MERKLE_TREE_HEIGHT;
 use zkc_state_manager::proto::kv_pair_client::KvPairClient;
 use zkc_state_manager::proto::kv_pair_server::KvPairServer;
 use zkc_state_manager::proto::node::NodeData;
+use zkc_state_manager::proto::vanilla_kv_pair_client::VanillaKvPairClient;
+use zkc_state_manager::proto::vanilla_kv_pair_server::VanillaKvPairServer;
 use zkc_state_manager::proto::GetLeafRequest;
 use zkc_state_manager::proto::GetLeafResponse;
 use zkc_state_manager::proto::GetRootRequest;
@@ -30,15 +32,12 @@ use tonic::Request;
 use tower::service_fn;
 
 // Start a gRPC server in the background, returns the JoinHandle to the background task of this
-// server, a RPC client for this server and a channel sender which can be used to cancel the
-// executation of this gRPC server by sending a message `()` with this sender. This function
-// automatically creates a random collection which is automatically dropped at the executation of
-// the server task.
-async fn start_server_get_client_and_cancellation_handler() -> (
-    tokio::task::JoinHandle<()>,
-    KvPairClient<Channel>,
-    oneshot::Sender<()>,
-) {
+// server, a channel with which a RPC client for this server can be created and
+// a channel sender which can be used to cancel the executation of this gRPC server
+// by sending a message `()` with this sender. This function automatically creates a random collection
+// which is automatically dropped at the executation of the server task.
+async fn start_server_get_channel_and_cancellation_handler(
+) -> (tokio::task::JoinHandle<()>, Channel, oneshot::Sender<()>) {
     let (tx, rx) = oneshot::channel::<()>();
     let socket = NamedTempFile::new().unwrap();
     let socket = Arc::new(socket.into_temp_path());
@@ -55,10 +54,12 @@ async fn start_server_get_client_and_cancellation_handler() -> (
     };
     let server = MongoKvPair::new_with_test_config(Some(test_config)).await;
     let kvpair_server = KvPairServer::new(server.clone());
+    let vanilla_kvpair_server = VanillaKvPairServer::new(server.clone());
 
     let join_handler = tokio::spawn(async move {
         let result = Server::builder()
             .add_service(kvpair_server)
+            .add_service(vanilla_kvpair_server)
             .serve_with_incoming_shutdown(stream, rx.map(drop))
             .await;
         assert!(result.is_ok());
@@ -82,7 +83,27 @@ async fn start_server_get_client_and_cancellation_handler() -> (
         .await
         .unwrap();
 
+    (join_handler, channel, tx)
+}
+
+async fn start_server_get_kvpair_client_and_cancellation_handler() -> (
+    tokio::task::JoinHandle<()>,
+    KvPairClient<Channel>,
+    oneshot::Sender<()>,
+) {
+    let (join_handler, channel, tx) = start_server_get_channel_and_cancellation_handler().await;
     let client = KvPairClient::new(channel);
+
+    (join_handler, client, tx)
+}
+
+async fn start_server_get_vanilla_kvpair_client_and_cancellation_handler() -> (
+    tokio::task::JoinHandle<()>,
+    VanillaKvPairClient<Channel>,
+    oneshot::Sender<()>,
+) {
+    let (join_handler, channel, tx) = start_server_get_channel_and_cancellation_handler().await;
+    let client = VanillaKvPairClient::new(channel);
 
     (join_handler, client, tx)
 }
@@ -140,7 +161,7 @@ async fn set_leaf(
 }
 
 async fn poseidon_hash(
-    client: &mut KvPairClient<Channel>,
+    client: &mut VanillaKvPairClient<Channel>,
     data: Option<Vec<u8>>,
     data_to_hash: Option<Vec<u8>>,
     persist: bool,
@@ -169,7 +190,8 @@ async fn test_get_root() {
         );
     }
 
-    let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;
+    let (join_handler, mut client, tx) =
+        start_server_get_kvpair_client_and_cancellation_handler().await;
     test(&mut client).await;
     tx.send(()).unwrap();
     join_handler.await.unwrap()
@@ -196,7 +218,8 @@ async fn test_get_leaf() {
         }
     }
 
-    let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;
+    let (join_handler, mut client, tx) =
+        start_server_get_kvpair_client_and_cancellation_handler().await;
     test(&mut client).await;
     tx.send(()).unwrap();
     join_handler.await.unwrap()
@@ -227,7 +250,8 @@ async fn test_set_and_get_leaf() {
         );
     }
 
-    let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;
+    let (join_handler, mut client, tx) =
+        start_server_get_kvpair_client_and_cancellation_handler().await;
     test(&mut client).await;
     tx.send(()).unwrap();
     join_handler.await.unwrap()
@@ -235,13 +259,14 @@ async fn test_set_and_get_leaf() {
 
 #[tokio::test]
 async fn test_poseidon_hash() {
-    async fn test(client: &mut KvPairClient<Channel>) {
+    async fn test(client: &mut VanillaKvPairClient<Channel>) {
         let response =
             poseidon_hash(client, Some([0; 1].to_vec()), Some([1; 32].to_vec()), true).await;
         dbg!(Hash::try_from(response.hash.as_slice()).unwrap());
     }
 
-    let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;
+    let (join_handler, mut client, tx) =
+        start_server_get_vanilla_kvpair_client_and_cancellation_handler().await;
     test(&mut client).await;
     tx.send(()).unwrap();
     join_handler.await.unwrap()

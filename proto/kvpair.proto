@@ -148,6 +148,10 @@ service KVPair {
       post : "/v1/nonleaves"
     };
   }
+}
+
+// Just zkWasm-host-circuits with little changes
+service VanillaKVPair {
   rpc PoseidonHash(PoseidonHashRequest) returns (PoseidonHashResponse) {
     option (google.api.http) = {
       post : "/v1/poseidon"
