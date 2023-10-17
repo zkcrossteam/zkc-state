@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use crate::kvpair::{LeafData, MERKLE_TREE_HEIGHT};
+use crate::kvpair::{LeafDataHash, MERKLE_TREE_HEIGHT};
 use crate::merkle::{get_offset, get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof};
 use crate::poseidon::gen_hasher;
 use crate::Error;
@@ -255,7 +255,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
     pub async fn insert_leaf_node(
         &mut self,
         index: u64,
-        data: &LeafData,
+        data: &LeafDataHash,
     ) -> Result<MerkleRecord, Error> {
         let record = MerkleRecord::new_leaf(index, *data);
         self.insert_merkle_record(&record).await
@@ -626,7 +626,7 @@ impl KvPair for MongoKvPair {
         // TODO: Should use session here
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
-        let leaf_data: LeafData = request.leaf_data.as_slice().try_into()?;
+        let leaf_data: LeafDataHash = request.leaf_data_hash.as_slice().try_into()?;
         let record = MerkleRecord::new_leaf(index, leaf_data);
         let proof = collection.set_leaf_and_get_proof(&record).await?;
         let proof = if request.proof_type == ProofType::ProofV0 as i32 {

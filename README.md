@@ -110,7 +110,7 @@ message GetLeafRequest {
 message SetLeafRequest {
   optional bytes contract_id = 1;
   uint32 index = 2;
-  bytes leaf_data = 3;
+  bytes leaf_data_hash = 3;
   ProofType proof_type = 4;
 }
 ```
@@ -153,7 +153,7 @@ returns
 
 ### Update leaf node data
 ```bash
-curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":1048575,"leaf_data":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
+curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":1048575,"leaf_data_hash":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
 ```
 returns
 ```
@@ -217,7 +217,7 @@ ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=
 
 And then set:
 ```
-curl -v --json '{"index":1152511,"leaf_data":"ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://rpc.zkcross.org:50000/v1/leaves"
+curl -v  --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":1152511,"leaf_data_hash":"ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://rpc.zkcross.org:50000/v1/leaves"
 ```
 ### Get new value
 

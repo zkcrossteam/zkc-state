@@ -1,5 +1,5 @@
 use zkc_state_manager::kvpair::Hash;
-use zkc_state_manager::kvpair::LeafData;
+use zkc_state_manager::kvpair::LeafDataHash;
 use zkc_state_manager::kvpair::DEFAULT_HASH_VEC;
 use zkc_state_manager::kvpair::MERKLE_TREE_HEIGHT;
 use zkc_state_manager::proto::kv_pair_client::KvPairClient;
@@ -120,15 +120,15 @@ async fn get_leaf(
 async fn set_leaf(
     client: &mut KvPairClient<Channel>,
     index: u64,
-    leaf_data: LeafData,
+    leaf_data_hash: LeafDataHash,
     proof_type: ProofType,
 ) -> SetLeafResponse {
-    let leaf_data: Vec<u8> = leaf_data.0.into();
+    let leaf_data_hash: Vec<u8> = leaf_data_hash.0.into();
     let proof_type = proof_type.into();
     let response = client
         .set_leaf(Request::new(SetLeafRequest {
             index,
-            leaf_data,
+            leaf_data_hash,
             proof_type,
             contract_id: None,
         }))
@@ -188,8 +188,8 @@ async fn test_get_leaf() {
         match node.node_data {
             Some(NodeData::Data(data)) => {
                 assert_eq!(
-                    LeafData::try_from(data.as_slice()).unwrap(),
-                    LeafData::default()
+                    LeafDataHash::try_from(data.as_slice()).unwrap(),
+                    LeafDataHash::default()
                 )
             }
             _ => panic!("Invalid node data"),
@@ -206,7 +206,7 @@ async fn test_get_leaf() {
 async fn test_set_and_get_leaf() {
     async fn test(client: &mut KvPairClient<Channel>) {
         let index = 2_u64.pow(MERKLE_TREE_HEIGHT.try_into().unwrap()) - 1;
-        let leaf_data: LeafData = [42_u8; 32].into();
+        let leaf_data: LeafDataHash = [42_u8; 32].into();
         let response = set_leaf(client, index, leaf_data, ProofType::ProofEmpty).await;
         assert!(response.node.is_some());
         let node = response.node.unwrap();
@@ -214,7 +214,7 @@ async fn test_set_and_get_leaf() {
         assert_eq!(node.node_type, NodeType::NodeLeaf as i32);
         match node.node_data {
             Some(NodeData::Data(data)) => {
-                assert_eq!(LeafData::try_from(data.as_slice()).unwrap(), leaf_data)
+                assert_eq!(LeafDataHash::try_from(data.as_slice()).unwrap(), leaf_data)
             }
             _ => panic!("Invalid node data"),
         }

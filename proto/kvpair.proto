@@ -72,7 +72,7 @@ message GetNonLeafResponse { Node node = 1; }
 message SetLeafRequest {
   optional bytes contract_id = 1;
   uint64 index = 2;
-  bytes leaf_data = 3;
+  bytes leaf_data_hash = 3;
   ProofType proof_type = 4;
 }
 
