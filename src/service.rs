@@ -33,7 +33,7 @@ pub struct MongoKvPair {
 
 #[derive(Debug)]
 pub struct MongoCollection<T> {
-    collection: Collection<T>,
+    merkle_collection: Collection<T>,
     session: Option<ClientSession>,
 }
 
@@ -42,7 +42,7 @@ impl<T> MongoCollection<T> {
         "zkwasmkvpair".to_string()
     }
 
-    fn get_collection_name(contract_id: &ContractId) -> String {
+    fn get_merkle_collection_name(contract_id: &ContractId) -> String {
         format!("MERKLEDATA_{}", hex::encode(contract_id.0))
     }
 
@@ -63,10 +63,10 @@ impl<T> MongoCollection<T> {
             None
         };
         let database = client.clone().database(Self::get_database_name().as_str());
-        let collection_name = Self::get_collection_name(contract_id);
-        let collection = database.collection::<T>(collection_name.as_str());
+        let collection_name = Self::get_merkle_collection_name(contract_id);
+        let merkle_collection = database.collection::<T>(collection_name.as_str());
         Ok(Self {
-            collection,
+            merkle_collection,
             session,
         })
     }
@@ -96,7 +96,7 @@ impl<T> MongoCollection<T> {
 
     pub async fn drop(&self) -> Result<(), mongodb::error::Error> {
         let options = mongodb::options::DropCollectionOptions::builder().build();
-        self.collection.drop(options).await?;
+        self.merkle_collection.drop(options).await?;
         Ok(())
     }
 }
@@ -114,11 +114,11 @@ impl MongoCollection<MerkleRecord> {
     ) -> Result<Option<MerkleRecord>, mongodb::error::Error> {
         let result = match self.session.as_mut() {
             Some(session) => {
-                self.collection
+                self.merkle_collection
                     .find_one_with_session(filter, options, session)
                     .await?
             }
-            _ => self.collection.find_one(filter, options).await?,
+            _ => self.merkle_collection.find_one(filter, options).await?,
         };
         Ok(result)
     }
@@ -130,11 +130,11 @@ impl MongoCollection<MerkleRecord> {
     ) -> Result<InsertOneResult, mongodb::error::Error> {
         let result = match self.session.as_mut() {
             Some(session) => {
-                self.collection
+                self.merkle_collection
                     .insert_one_with_session(doc, options, session)
                     .await?
             }
-            _ => self.collection.insert_one(doc, options).await?,
+            _ => self.merkle_collection.insert_one(doc, options).await?,
         };
         Ok(result)
     }
@@ -147,12 +147,12 @@ impl MongoCollection<MerkleRecord> {
     ) -> Result<UpdateResult, mongodb::error::Error> {
         let result = match self.session.as_mut() {
             Some(session) => {
-                self.collection
+                self.merkle_collection
                     .replace_one_with_session(query, replacement, options, session)
                     .await?
             }
             _ => {
-                self.collection
+                self.merkle_collection
                     .replace_one(query, replacement, options)
                     .await?
             }
@@ -168,11 +168,15 @@ impl MongoCollection<MerkleRecord> {
     ) -> Result<UpdateResult, mongodb::error::Error> {
         let result = match self.session.as_mut() {
             Some(session) => {
-                self.collection
+                self.merkle_collection
                     .update_one_with_session(query, update, options, session)
                     .await?
             }
-            _ => self.collection.update_one(query, update, options).await?,
+            _ => {
+                self.merkle_collection
+                    .update_one(query, update, options)
+                    .await?
+            }
         };
         Ok(result)
     }
