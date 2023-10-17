@@ -135,8 +135,8 @@ impl Hash {
         hasher.squeeze().to_repr().into()
     }
 
-    pub fn hash_data(data: &LeafDataHash) -> Self {
-        let data: [u8; 32] = data.0;
+    pub fn hash_data(data: &LeafData) -> Self {
+        let data: [u8; 32] = data.0.clone().try_into().unwrap();
         let batchdata = data
             .chunks(16)
             .map(|x| {
@@ -175,7 +175,7 @@ impl Hash {
         }
         Ok(())
     }
-    pub fn validate_data(hash: &Hash, data: &LeafDataHash) -> Result<(), Error> {
+    pub fn validate_data(hash: &Hash, data: &LeafData) -> Result<(), Error> {
         let new_hash = Self::hash_data(data);
         if *hash != new_hash {
             return Err(Error::InvalidArgument(format!(
@@ -187,35 +187,47 @@ impl Hash {
     }
 }
 
-#[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
-pub struct LeafDataHash(
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LeafData(
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
-    #[serde(deserialize_with = "self::deserialize_u256_from_binary")]
-    pub [u8; 32],
+    #[serde(deserialize_with = "self::deserialize_bytes_from_binary")]
+    pub Vec<u8>,
 );
 
+impl Default for LeafData {
+    fn default() -> Self {
+        [0; 32].into()
+    }
+}
+
 // TODO: Maybe use something like protovalidate to automatically validate fields.
-impl TryFrom<&[u8]> for LeafDataHash {
+impl TryFrom<&[u8]> for LeafData {
     type Error = Error;
 
-    fn try_from(a: &[u8]) -> Result<LeafDataHash, Self::Error> {
+    fn try_from(a: &[u8]) -> Result<LeafData, Self::Error> {
         a.try_into()
             .map_err(|_e| {
                 Error::InvalidArgument("LeafData malformed (must be [u8; 32])".to_string())
             })
-            .map(LeafDataHash)
+            .map(LeafData)
     }
 }
 
-impl From<LeafDataHash> for Vec<u8> {
-    fn from(value: LeafDataHash) -> Self {
+impl From<LeafData> for Vec<u8> {
+    fn from(value: LeafData) -> Self {
         value.0.into()
     }
 }
 
-impl From<[u8; 32]> for LeafDataHash {
+impl From<Vec<u8>> for LeafData {
+    fn from(value: Vec<u8>) -> Self {
+        LeafData(value)
+    }
+}
+
+impl From<[u8; 32]> for LeafData {
     fn from(value: [u8; 32]) -> Self {
-        Self(value)
+        Self(value.to_vec())
     }
 }
 
@@ -297,24 +309,25 @@ pub struct MongoMerkle {
     client: KvPairClient<Channel>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, Eq, PartialEq)]
 pub struct MerkleRecord {
     pub index: u64,
     pub hash: Hash,
     pub left: Hash,
     pub right: Hash,
-    pub data: LeafDataHash,
+    pub data: LeafData,
 }
 
 impl TryFrom<Node> for MerkleRecord {
     type Error = Error;
 
     fn try_from(n: Node) -> Result<Self, Self::Error> {
+        let hash: Hash = n.hash.as_slice().try_into()?;
         if n.node_type == NodeType::NodeLeaf as i32 {
             match n.node_data {
                 Some(NodeData::Data(data)) => {
-                    let data: LeafDataHash = data.as_slice().try_into()?;
-                    let record = MerkleRecord::new_leaf(n.index, data);
+                    let data: LeafData = data.as_slice().try_into()?;
+                    let record = MerkleRecord::new_leaf(n.index, hash, data);
                     assert_eq!(record.hash.0.to_vec(), n.hash);
                     Ok(record)
                 }
@@ -415,10 +428,10 @@ impl MerkleRecord {
         }
     }
 
-    pub fn new_leaf(index: u64, data: impl Into<LeafDataHash>) -> Self {
+    pub fn new_leaf(index: u64, hash: impl Into<Hash>, data: impl Into<LeafData>) -> Self {
         let mut record = MerkleRecord::new(index);
         record.data = data.into();
-        record.hash = Hash::hash_data(&record.data);
+        record.hash = hash.into();
         record
     }
 
@@ -545,17 +558,16 @@ impl MongoMerkle {
     pub async fn set_leaf(
         &mut self,
         index: u64,
-        leaf_data_hash: LeafDataHash,
+        leaf_data: LeafData,
         proof_type: ProofType,
     ) -> Result<SetLeafResponse, Status> {
-        let leaf_data_hash: Vec<u8> = leaf_data_hash.0.into();
         let proof_type = proof_type.into();
         let response = self
             .client
             .set_leaf(Request::new(SetLeafRequest {
                 index,
-                leaf_data_hash: Some(leaf_data_hash),
-                leaf_data: None,
+                leaf_data_hash: None,
+                leaf_data: leaf_data.0,
                 leaf_data_for_hashing: None,
                 proof_type,
                 contract_id: Some(self.contract_id.into()),
@@ -668,12 +680,11 @@ impl MerkleTree<Hash, MERKLE_TREE_HEIGHT> for MongoMerkle {
 
     fn set_leaf(&mut self, leaf: &MerkleRecord) -> Result<(), MerkleError> {
         self.boundary_check(leaf.index())?; //should be leaf check?
-        executor::block_on(self.set_leaf(leaf.index, leaf.data, ProofType::ProofEmpty)).map_err(
-            |e| {
+        executor::block_on(self.set_leaf(leaf.index, leaf.data.clone(), ProofType::ProofEmpty))
+            .map_err(|e| {
                 dbg!(e);
                 MerkleError::new(leaf.hash, leaf.index, MerkleErrorCode::InvalidOther)
-            },
-        )?;
+            })?;
         Ok(())
     }
 }

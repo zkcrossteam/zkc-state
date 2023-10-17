@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use crate::kvpair::{LeafDataHash, MERKLE_TREE_HEIGHT};
+use crate::kvpair::MERKLE_TREE_HEIGHT;
 use crate::merkle::{get_offset, get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof};
 use crate::Error;
 
@@ -218,7 +218,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
     pub async fn get_root_merkle_record(&mut self) -> Result<Option<MerkleRecord>, Error> {
         let filter = doc! {"_id": Self::get_current_root_object_id()};
         let record = self.find_one_merkle_record(filter, None).await?;
-        dbg!(record);
+        dbg!(&record);
         if record.is_some() {
             return Ok(record);
         }
@@ -242,22 +242,13 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
             {
                 let result = self.insert_one_merkle_record(record, None).await?;
                 dbg!(record, &result);
-                Ok(*record)
+                Ok(record.clone())
             },
             |record| {
                 //println!("find existing node, preventing duplicate");
                 Ok(record)
             },
         )
-    }
-
-    pub async fn insert_leaf_node(
-        &mut self,
-        index: u64,
-        data: &LeafDataHash,
-    ) -> Result<MerkleRecord, Error> {
-        let record = MerkleRecord::new_leaf(index, *data);
-        self.insert_merkle_record(&record).await
     }
 
     pub async fn insert_non_leaf_node(
@@ -292,7 +283,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
             .update_one_merkle_record(filter, update, options)
             .await?;
         dbg!(&result);
-        Ok(*record)
+        Ok(record.clone())
     }
 
     pub async fn get_leaf_and_proof(
@@ -606,9 +597,10 @@ impl KvPair for MongoKvPair {
                 (record, proof_bytes)
             }
         };
+        dbg!(&record, &proof);
         let node = record.try_into()?;
+        dbg!(&node);
         collection.commit().await.map_err(Error::from)?;
-        dbg!(&record, &node, &proof);
         Ok(Response::new(GetLeafResponse {
             node: Some(node),
             proof,
@@ -625,29 +617,22 @@ impl KvPair for MongoKvPair {
         // TODO: Should use session here
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
-        let leaf_data_hash: LeafDataHash =
-            match (request.leaf_data_hash, request.leaf_data_for_hashing) {
-                (Some(leaf_data_hash), Some(data))
-                    if &crate::poseidon::hash(&data)?[..] != leaf_data_hash =>
-                {
-                    return Err(Status::invalid_argument(
-                        "Inconsistent leaf data for hashing and leaf data hash",
-                    ));
-                }
-                (Some(leaf_data_hash), _) => leaf_data_hash.as_slice().try_into()?,
-                (None, Some(data)) => crate::poseidon::hash(&data)?.as_slice().try_into()?,
-                (None, None) => {
-                    return Err(Status::invalid_argument(
-                        "Leaf data for hashing or leaf data hash must be given",
-                    ))
-                }
-            };
-        if let Some(data) = request.leaf_data {
-            let hash = leaf_data_hash.0.into();
-            let record = DataHashRecord { hash, data };
-            collection.insert_datahash_record(&record).await?;
-        }
-        let record = MerkleRecord::new_leaf(index, leaf_data_hash);
+
+        let data = request.leaf_data;
+        let leaf_data_for_hashing = request.leaf_data_for_hashing.unwrap_or(data.clone());
+        let leaf_data_hash: Hash = match request.leaf_data_hash {
+            Some(ref h) => h.as_slice().try_into()?,
+            _ => crate::poseidon::hash(&leaf_data_for_hashing)?.into(),
+        };
+
+        let record = DataHashRecord {
+            hash: leaf_data_hash,
+            data: data.clone(),
+        };
+        collection.insert_datahash_record(&record).await?;
+
+        let record = MerkleRecord::new_leaf(index, leaf_data_hash, data);
+
         let proof = collection.set_leaf_and_get_proof(&record).await?;
         let proof = if request.proof_type == ProofType::ProofV0 as i32 {
             Some(Proof {
@@ -657,9 +642,10 @@ impl KvPair for MongoKvPair {
         } else {
             None
         };
+        dbg!(&record);
         let node = record.try_into()?;
         collection.commit().await.map_err(Error::from)?;
-        dbg!(&record, &node);
+        dbg!(&node);
         Ok(Response::new(SetLeafResponse {
             node: Some(node),
             proof,
@@ -677,8 +663,9 @@ impl KvPair for MongoKvPair {
         let index = request.index;
         let hash: Hash = request.hash.as_slice().try_into()?;
         let record = collection.must_get_merkle_record(index, &hash).await?;
+        dbg!(&record);
         let node = record.try_into()?;
-        dbg!(&record, &node);
+        dbg!(&node);
         Ok(Response::new(GetNonLeafResponse { node: Some(node) }))
     }
 
@@ -698,8 +685,9 @@ impl KvPair for MongoKvPair {
             Hash::validate_children(&hash.as_slice().try_into()?, &left, &right)?;
         }
         let record = collection.insert_non_leaf_node(index, left, right).await?;
+        dbg!(&record);
         let node = record.try_into()?;
-        dbg!(&record, &node);
+        dbg!(&node);
         Ok(Response::new(SetNonLeafResponse { node: Some(node) }))
     }
 
