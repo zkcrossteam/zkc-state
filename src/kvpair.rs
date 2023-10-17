@@ -135,8 +135,8 @@ impl Hash {
         hasher.squeeze().to_repr().into()
     }
 
-    pub fn hash_data(data: &LeafData) -> Self {
-        let data: [u8; 32] = data.0.clone().try_into().unwrap();
+    pub fn hash_data(data: &[u8]) -> Self {
+        let data: [u8; 32] = data.clone().try_into().unwrap();
         let batchdata = data
             .chunks(16)
             .map(|x| {
@@ -176,7 +176,7 @@ impl Hash {
         Ok(())
     }
     pub fn validate_data(hash: &Hash, data: &LeafData) -> Result<(), Error> {
-        let new_hash = Self::hash_data(data);
+        let new_hash = Self::hash_data(&data.0);
         if *hash != new_hash {
             return Err(Error::InvalidArgument(format!(
                 "Hash not matching: {:?} hashed to {:?}, not {:?}",
@@ -309,13 +309,12 @@ pub struct MongoMerkle {
     client: KvPairClient<Channel>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq)]
 pub struct MerkleRecord {
     pub index: u64,
     pub hash: Hash,
     pub left: Hash,
     pub right: Hash,
-    pub data: LeafData,
 }
 
 impl TryFrom<Node> for MerkleRecord {
@@ -325,9 +324,8 @@ impl TryFrom<Node> for MerkleRecord {
         let hash: Hash = n.hash.as_slice().try_into()?;
         if n.node_type == NodeType::NodeLeaf as i32 {
             match n.node_data {
-                Some(NodeData::Data(data)) => {
-                    let data: LeafData = data.as_slice().try_into()?;
-                    let record = MerkleRecord::new_leaf(n.index, hash, data);
+                Some(NodeData::Data(_)) => {
+                    let record = MerkleRecord::new_leaf(n.index, hash);
                     assert_eq!(record.hash.0.to_vec(), n.hash);
                     Ok(record)
                 }
@@ -356,28 +354,53 @@ impl TryFrom<Node> for MerkleRecord {
     }
 }
 
+impl TryFrom<(MerkleRecord, DataHashRecord)> for Node {
+    type Error = Error;
+
+    fn try_from(record: (MerkleRecord, DataHashRecord)) -> Result<Self, Self::Error> {
+        let merkle_record = record.0;
+        let datahash_record = record.1;
+        let node = Self::try_from(merkle_record);
+        if node.is_ok() {
+            return node;
+        }
+
+        if merkle_record.hash != datahash_record.hash {
+            return Err(Error::InvalidArgument("Hash mismatched".to_string()));
+        }
+
+        let node_type = get_node_type(merkle_record.index(), MERKLE_TREE_HEIGHT);
+        if node_type != NodeType::NodeLeaf {
+            return Err(Error::InvalidArgument("Unknown node type".to_string()));
+        }
+        let node_data = { NodeData::Data(datahash_record.data) };
+        Ok(Node {
+            index: merkle_record.index(),
+            hash: merkle_record.hash().into(),
+            node_type: node_type.into(),
+            node_data: Some(node_data),
+        })
+    }
+}
+
 impl TryFrom<MerkleRecord> for Node {
     type Error = Error;
 
-    fn try_from(record: MerkleRecord) -> Result<Self, Self::Error> {
-        let index = record.index();
-        let hash = record.hash().into();
+    fn try_from(merkle_record: MerkleRecord) -> Result<Self, Self::Error> {
+        let index = merkle_record.index();
+        let hash = merkle_record.hash().into();
         let node_type = get_node_type(index, MERKLE_TREE_HEIGHT);
-        if node_type != NodeType::NodeLeaf && node_type != NodeType::NodeNonLeaf {
-            return Err(Error::InconsistentData(
-                "Invalid node (must be leaf or nonleaf node)".to_string(),
-            ));
+        if node_type != NodeType::NodeNonLeaf {
+            return Err(Error::InconsistentData("Unknown node type".to_string()));
         }
-        let node_data = if node_type == NodeType::NodeLeaf {
-            NodeData::Data(record.data.0.to_vec())
-        } else {
-            let left_child_hash = record
+        let node_data = {
+            let left_child_hash = merkle_record
                 .left()
                 .ok_or(Error::InconsistentData(
                     "Nonleaf node has no children".to_string(),
                 ))?
                 .into();
-            let right_child_hash = record
+            let right_child_hash = merkle_record
                 .right()
                 .ok_or(Error::InconsistentData(
                     "Nonleaf node has no children".to_string(),
@@ -405,9 +428,7 @@ impl MerkleNode<Hash> for MerkleRecord {
         self.hash
     }
     fn set(&mut self, data: &[u8]) {
-        let data: [u8; 32] = data.clone().try_into().unwrap();
-        self.data = data.into();
-        self.hash = Hash::hash_data(&self.data);
+        self.hash = Hash::hash_data(data);
     }
     fn right(&self) -> Option<Hash> {
         Some(self.right)
@@ -422,15 +443,13 @@ impl MerkleRecord {
         MerkleRecord {
             index,
             hash: [0; 32].into(),
-            data: [0; 32].into(),
             left: [0; 32].into(),
             right: [0; 32].into(),
         }
     }
 
-    pub fn new_leaf(index: u64, hash: impl Into<Hash>, data: impl Into<LeafData>) -> Self {
+    pub fn new_leaf(index: u64, hash: impl Into<Hash>) -> Self {
         let mut record = MerkleRecord::new(index);
-        record.data = data.into();
         record.hash = hash.into();
         record
     }
@@ -451,15 +470,6 @@ impl MerkleRecord {
         record
     }
 
-    pub fn data_as_u64(&self) -> [u64; 4] {
-        [
-            u64::from_le_bytes(self.data.0[0..8].try_into().unwrap()),
-            u64::from_le_bytes(self.data.0[8..16].try_into().unwrap()),
-            u64::from_le_bytes(self.data.0[16..24].try_into().unwrap()),
-            u64::from_le_bytes(self.data.0[24..32].try_into().unwrap()),
-        ]
-    }
-
     pub fn get_default_record(index: u64) -> Result<Self, MerkleError> {
         let height = (index + 1).ilog2() as usize;
         let default = Hash::get_default_hash(height)?;
@@ -471,19 +481,29 @@ impl MerkleRecord {
         Ok(MerkleRecord {
             index,
             hash: default,
-            data: [0; 32].into(),
             left: child_hash,
             right: child_hash,
         })
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DataHashRecord {
     pub hash: Hash,
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
     #[serde(deserialize_with = "self::deserialize_bytes_from_binary")]
     pub data: Vec<u8>,
+}
+
+impl Default for DataHashRecord {
+    fn default() -> Self {
+        let data = LeafData::default();
+        let hash = Hash::hash_data(&(data.0));
+        Self {
+            hash: hash.into(),
+            data: data.into(),
+        }
+    }
 }
 
 impl DataHashRecord {
@@ -680,7 +700,7 @@ impl MerkleTree<Hash, MERKLE_TREE_HEIGHT> for MongoMerkle {
 
     fn set_leaf(&mut self, leaf: &MerkleRecord) -> Result<(), MerkleError> {
         self.boundary_check(leaf.index())?; //should be leaf check?
-        executor::block_on(self.set_leaf(leaf.index, leaf.data.clone(), ProofType::ProofEmpty))
+        executor::block_on(self.set_leaf(leaf.index, Default::default(), ProofType::ProofEmpty))
             .map_err(|e| {
                 dbg!(e);
                 MerkleError::new(leaf.hash, leaf.index, MerkleErrorCode::InvalidOther)

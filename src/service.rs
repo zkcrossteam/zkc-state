@@ -271,7 +271,6 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
                 "hash": to_bson(&record.hash).unwrap(),
                 "left": to_bson(&record.left).unwrap(),
                 "right": to_bson(&record.right).unwrap(),
-                "data": to_bson(&record.data).unwrap(),
             },
             // We use this to track the number of root updates.
             "$inc": {
@@ -406,6 +405,25 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
                 Ok(record.clone())
             },
         )
+    }
+
+    pub async fn get_datahash_record(
+        &mut self,
+        hash: &Hash,
+    ) -> Result<Option<DataHashRecord>, Error> {
+        dbg!(hash);
+        if *hash == DataHashRecord::default().hash {
+            return Ok(Some(DataHashRecord::default()));
+        }
+        let mut filter = doc! {};
+        filter.insert("hash", hash_to_bson(hash));
+        let record = self.find_one_datahash_record(filter, None).await?;
+        return Ok(record);
+    }
+
+    pub async fn must_get_datahash_record(&mut self, hash: &Hash) -> Result<DataHashRecord, Error> {
+        let record = self.get_datahash_record(hash).await?;
+        record.ok_or(Error::Precondition("Datahash record not found".to_string()))
     }
 }
 
@@ -598,7 +616,8 @@ impl KvPair for MongoKvPair {
             }
         };
         dbg!(&record, &proof);
-        let node = record.try_into()?;
+        let datahash_record = collection.must_get_datahash_record(&record.hash()).await?;
+        let node = (record, datahash_record).try_into()?;
         dbg!(&node);
         collection.commit().await.map_err(Error::from)?;
         Ok(Response::new(GetLeafResponse {
@@ -625,15 +644,15 @@ impl KvPair for MongoKvPair {
             _ => crate::poseidon::hash(&leaf_data_for_hashing)?.into(),
         };
 
-        let record = DataHashRecord {
+        let datahash_record = DataHashRecord {
             hash: leaf_data_hash,
             data: data.clone(),
         };
-        collection.insert_datahash_record(&record).await?;
+        collection.insert_datahash_record(&datahash_record).await?;
 
-        let record = MerkleRecord::new_leaf(index, leaf_data_hash, data);
+        let merkle_record = MerkleRecord::new_leaf(index, leaf_data_hash);
 
-        let proof = collection.set_leaf_and_get_proof(&record).await?;
+        let proof = collection.set_leaf_and_get_proof(&merkle_record).await?;
         let proof = if request.proof_type == ProofType::ProofV0 as i32 {
             Some(Proof {
                 proof_type: request.proof_type,
@@ -642,8 +661,8 @@ impl KvPair for MongoKvPair {
         } else {
             None
         };
-        dbg!(&record);
-        let node = record.try_into()?;
+        dbg!(&merkle_record);
+        let node = (merkle_record, datahash_record).try_into()?;
         collection.commit().await.map_err(Error::from)?;
         dbg!(&node);
         Ok(Response::new(SetLeafResponse {
