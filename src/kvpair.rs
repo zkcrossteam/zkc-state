@@ -473,6 +473,12 @@ pub struct DataHashRecord {
     pub data: Vec<u8>,
 }
 
+impl DataHashRecord {
+    pub fn new(hash: Hash, data: Vec<u8>) -> Self {
+        Self { hash, data }
+    }
+}
+
 impl MongoMerkle {
     pub async fn get_client() -> KvPairClient<Channel> {
         let server =

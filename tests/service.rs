@@ -10,6 +10,8 @@ use zkc_state_manager::proto::GetLeafResponse;
 use zkc_state_manager::proto::GetRootRequest;
 use zkc_state_manager::proto::GetRootResponse;
 use zkc_state_manager::proto::NodeType;
+use zkc_state_manager::proto::PoseidonHashRequest;
+use zkc_state_manager::proto::PoseidonHashResponse;
 use zkc_state_manager::proto::ProofType;
 use zkc_state_manager::proto::SetLeafRequest;
 use zkc_state_manager::proto::SetLeafResponse;
@@ -59,9 +61,13 @@ async fn start_server_get_client_and_cancellation_handler() -> (
             .add_service(kvpair_server)
             .serve_with_incoming_shutdown(stream, rx.map(drop))
             .await;
-        let result2 = server.drop_test_collection().await;
         assert!(result.is_ok());
-        assert!(result2.is_ok());
+        if std::env::var("KEEP_TEST_COLLECTIONS").is_ok() {
+            println!("Keeping test collections");
+        } else {
+            let result2 = server.drop_test_collection().await;
+            assert!(result2.is_ok());
+        }
     });
 
     let socket = Arc::clone(&socket);
@@ -125,6 +131,26 @@ async fn set_leaf(
             leaf_data,
             proof_type,
             contract_id: None,
+        }))
+        .await
+        .unwrap();
+    dbg!(&response);
+
+    response.into_inner()
+}
+
+async fn poseidon_hash(
+    client: &mut KvPairClient<Channel>,
+    data: Option<Vec<u8>>,
+    data_to_hash: Option<Vec<u8>>,
+    persist: bool,
+) -> PoseidonHashResponse {
+    let response = client
+        .poseidon_hash(Request::new(PoseidonHashRequest {
+            contract_id: None,
+            data,
+            data_to_hash,
+            persist,
         }))
         .await
         .unwrap();
@@ -199,6 +225,20 @@ async fn test_set_and_get_leaf() {
             response.node.unwrap().node_data,
             Some(NodeData::Data(leaf_data.into()))
         );
+    }
+
+    let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;
+    test(&mut client).await;
+    tx.send(()).unwrap();
+    join_handler.await.unwrap()
+}
+
+#[tokio::test]
+async fn test_poseidon_hash() {
+    async fn test(client: &mut KvPairClient<Channel>) {
+        let response =
+            poseidon_hash(client, Some([0; 1].to_vec()), Some([1; 32].to_vec()), true).await;
+        dbg!(Hash::try_from(response.hash.as_slice()).unwrap());
     }
 
     let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;

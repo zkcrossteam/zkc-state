@@ -2,6 +2,7 @@ use std::borrow::Borrow;
 
 use crate::kvpair::{LeafData, MERKLE_TREE_HEIGHT};
 use crate::merkle::{get_offset, get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof};
+use crate::poseidon::gen_hasher;
 use crate::Error;
 
 use super::kvpair::{hash_to_bson, u64_to_bson, ContractId, DataHashRecord, Hash, MerkleRecord};
@@ -70,11 +71,12 @@ impl<T, R> MongoCollection<T, R> {
         let database = client.clone().database(Self::get_database_name().as_str());
         let merkle_collection_name = Self::get_merkle_collection_name(contract_id);
         let merkle_collection = database.collection::<T>(merkle_collection_name.as_str());
-        let data_collection_name = Self::get_data_collection_name(contract_id);
-        let data_collection = database.collection::<R>(data_collection_name.as_str());
+        let datahash_collection_name = Self::get_data_collection_name(contract_id);
+        let datahash_collection = database.collection::<R>(datahash_collection_name.as_str());
+        dbg!(merkle_collection_name, datahash_collection_name);
         Ok(Self {
             merkle_collection,
-            datahash_collection: data_collection,
+            datahash_collection,
             session,
         })
     }
@@ -402,6 +404,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
         let mut filter = doc! {};
         filter.insert("hash", hash_to_bson(&record.hash));
         let exists = self.find_one_datahash_record(filter, None).await?;
+        dbg!(&exists);
         exists.map_or(
             {
                 let result = self.insert_one_datahash_record(record, None).await?;
@@ -678,5 +681,51 @@ impl KvPair for MongoKvPair {
         let node = record.try_into()?;
         dbg!(&record, &node);
         Ok(Response::new(SetNonLeafResponse { node: Some(node) }))
+    }
+
+    async fn poseidon_hash(
+        &self,
+        request: Request<PoseidonHashRequest>,
+    ) -> std::result::Result<Response<PoseidonHashResponse>, Status> {
+        use ff::PrimeField;
+        use halo2_proofs::pairing::bn256::Fr;
+
+        dbg!(&request);
+        let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
+        let request = request.into_inner();
+        // TODO: Should use session here
+        let mut collection = self.new_collection(&contract_id, false).await?;
+        if request.data.is_none() {
+            return Err(Status::invalid_argument("Data not given"));
+        }
+        let data = request.data.unwrap();
+        let data_to_hash = request.data_to_hash.unwrap_or(data.clone());
+        if data_to_hash.len() % 32 != 0 {
+            return Err(Status::invalid_argument(
+                "Invalid data to hash, must be an array of field elements",
+            ));
+        }
+        let frs = data_to_hash
+            .chunks(32)
+            .map(|x| {
+                let v = x.try_into().unwrap();
+                let f = Fr::from_repr(v);
+                if f.is_none().into() {
+                    return Err(Status::invalid_argument(
+                        "Invalid data to hash, must be an array of field elements",
+                    ));
+                }
+                Ok(f.unwrap())
+            })
+            .collect::<Result<Vec<Fr>, _>>()?;
+        let mut hasher = gen_hasher();
+        hasher.update(&frs);
+        let hash = hasher.squeeze().to_repr().into();
+        if request.persist {
+            let record = DataHashRecord::new(hash, data.clone());
+            dbg!(&record);
+            collection.insert_datahash_record(&record).await?;
+        }
+        Ok(Response::new(PoseidonHashResponse { hash: hash.into() }))
     }
 }
