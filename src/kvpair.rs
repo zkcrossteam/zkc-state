@@ -106,6 +106,15 @@ impl TryFrom<&[u8]> for Hash {
     }
 }
 
+// TODO: Maybe use something like protovalidate to automatically validate fields.
+impl TryFrom<Vec<u8>> for Hash {
+    type Error = Error;
+
+    fn try_from(a: Vec<u8>) -> Result<Hash, Self::Error> {
+        a.as_slice().try_into()
+    }
+}
+
 impl From<Hash> for Bson {
     fn from(hash: Hash) -> Self {
         hash_to_bson(&hash)
@@ -587,8 +596,7 @@ impl MongoMerkle {
             .set_leaf(Request::new(SetLeafRequest {
                 index,
                 leaf_data_hash: None,
-                leaf_data: leaf_data.0,
-                leaf_data_for_hashing: None,
+                leaf_data: Some(leaf_data.0),
                 proof_type,
                 contract_id: Some(self.contract_id.into()),
             }))

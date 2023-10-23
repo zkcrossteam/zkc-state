@@ -637,20 +637,36 @@ impl KvPair for MongoKvPair {
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
 
-        let data = request.leaf_data;
-        let leaf_data_for_hashing = request.leaf_data_for_hashing.unwrap_or(data.clone());
-        let leaf_data_hash: Hash = match request.leaf_data_hash {
-            Some(ref h) => h.as_slice().try_into()?,
-            _ => crate::poseidon::hash(&leaf_data_for_hashing)?.into(),
-        };
+        let (data, hash, should_insert_into_db): (Vec<u8>, Hash, bool) =
+            match (request.leaf_data, request.leaf_data_hash) {
+                (Some(data), Some(hash)) => (data, hash.try_into()?, true),
+                (Some(data), None) => (data.clone(), crate::poseidon::hash(&data)?.into(), true),
+                (None, Some(hash)) => {
+                    let hash = hash
+                        .try_into()
+                        .map_err(|_e| Status::invalid_argument("Invalid hash"))?;
+                    let record = collection
+                        .get_datahash_record(&hash)
+                        .await?
+                        .ok_or(Status::invalid_argument("No data associated to this hash"))?;
+                    (record.data, hash, false)
+                }
+                (None, None) => {
+                    return Err(Status::invalid_argument(
+                        "Both data and data hash are not provided",
+                    ))
+                }
+            };
 
         let datahash_record = DataHashRecord {
-            hash: leaf_data_hash,
+            hash,
             data: data.clone(),
         };
-        collection.insert_datahash_record(&datahash_record).await?;
+        if should_insert_into_db {
+            collection.insert_datahash_record(&datahash_record).await?;
+        }
 
-        let merkle_record = MerkleRecord::new_leaf(index, leaf_data_hash);
+        let merkle_record = MerkleRecord::new_leaf(index, hash);
 
         let proof = collection.set_leaf_and_get_proof(&merkle_record).await?;
         let proof = if request.proof_type == ProofType::ProofV0 as i32 {

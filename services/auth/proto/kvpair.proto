@@ -73,9 +73,8 @@ message SetLeafRequest {
   optional bytes contract_id = 1;
   uint64 index = 2;
   optional bytes leaf_data_hash = 3;
-  ProofType proof_type = 4;
-  bytes leaf_data = 5;
-  optional bytes leaf_data_for_hashing = 6;
+  optional bytes leaf_data = 4;
+  ProofType proof_type = 5;
 }
 
 message SetLeafResponse {
@@ -102,8 +101,8 @@ message PoseidonHashRequest {
   // Because the original data we want to hash can be any binary data,
   // it may not be a valid input to the poseidon hash function
   // (which takes an array of field elements as input), we may need to
-  // pad or modify the original data to hash it. This parameter is the transformed
-  // data which can be feeded into poseidon hash function directly.
+  // pad or modify the original data to hash it. This parameter is the
+  // transformed data which can be feeded into poseidon hash function directly.
   // As the way of transforming the of original data is non-standard,
   // the caller MUST pass the transformed data here. It is guarenteed
   // that the hash returned here is stable.
@@ -113,9 +112,7 @@ message PoseidonHashRequest {
   bool persist = 4;
 }
 
-message PoseidonHashResponse {
-  bytes hash = 1;
-}
+message PoseidonHashResponse { bytes hash = 1; }
 
 service KVPair {
   rpc GetRoot(GetRootRequest) returns (GetRootResponse) {
