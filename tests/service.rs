@@ -150,7 +150,6 @@ async fn poseidon_hash(
     let response = client
         .poseidon_hash(Request::new(PoseidonHashRequest {
             contract_id: None,
-            data,
             data_to_hash,
             persist,
         }))

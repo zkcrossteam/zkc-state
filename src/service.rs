@@ -731,21 +731,11 @@ impl KvPair for MongoKvPair {
         request: Request<PoseidonHashRequest>,
     ) -> std::result::Result<Response<PoseidonHashResponse>, Status> {
         dbg!(&request);
-        let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
+        let _contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
         let request = request.into_inner();
         // TODO: Should use session here
-        let mut collection = self.new_collection(&contract_id, false).await?;
-        if request.data.is_none() {
-            return Err(Status::invalid_argument("Data not given"));
-        }
-        let data = request.data.unwrap();
-        let data_to_hash = request.data_to_hash.unwrap_or(data.clone());
+        let data_to_hash = request.data;
         let hash = crate::poseidon::hash(&data_to_hash)?;
-        if request.persist {
-            let record = DataHashRecord::new(hash.try_into().unwrap(), data.clone());
-            dbg!(&record);
-            collection.insert_datahash_record(&record).await?;
-        }
         Ok(Response::new(PoseidonHashResponse { hash: hash.into() }))
     }
 }
