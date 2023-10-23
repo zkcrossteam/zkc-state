@@ -242,7 +242,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
             {
                 let result = self.insert_one_merkle_record(record, None).await?;
                 dbg!(record, &result);
-                Ok(record.clone())
+                Ok(*record)
             },
             |record| {
                 //println!("find existing node, preventing duplicate");
@@ -282,7 +282,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
             .update_one_merkle_record(filter, update, options)
             .await?;
         dbg!(&result);
-        Ok(record.clone())
+        Ok(*record)
     }
 
     pub async fn get_leaf_and_proof(
@@ -418,7 +418,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
         let mut filter = doc! {};
         filter.insert("hash", hash_to_bson(hash));
         let record = self.find_one_datahash_record(filter, None).await?;
-        return Ok(record);
+        Ok(record)
     }
 
     pub async fn must_get_datahash_record(&mut self, hash: &Hash) -> Result<DataHashRecord, Error> {

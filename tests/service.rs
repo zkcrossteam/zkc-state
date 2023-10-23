@@ -128,11 +128,10 @@ async fn set_leaf(
     let response = client
         .set_leaf(Request::new(SetLeafRequest {
             index,
-            leaf_data,
+            leaf_data: Some(leaf_data),
             proof_type,
             contract_id: None,
             leaf_data_hash: None,
-            leaf_data_for_hashing: None,
         }))
         .await
         .unwrap();
@@ -141,17 +140,11 @@ async fn set_leaf(
     response.into_inner()
 }
 
-async fn poseidon_hash(
-    client: &mut KvPairClient<Channel>,
-    data: Option<Vec<u8>>,
-    data_to_hash: Option<Vec<u8>>,
-    persist: bool,
-) -> PoseidonHashResponse {
+async fn poseidon_hash(client: &mut KvPairClient<Channel>, data: Vec<u8>) -> PoseidonHashResponse {
     let response = client
         .poseidon_hash(Request::new(PoseidonHashRequest {
             contract_id: None,
-            data_to_hash,
-            persist,
+            data,
         }))
         .await
         .unwrap();
@@ -237,8 +230,7 @@ async fn test_set_and_get_leaf() {
 #[tokio::test]
 async fn test_poseidon_hash() {
     async fn test(client: &mut KvPairClient<Channel>) {
-        let response =
-            poseidon_hash(client, Some([0; 1].to_vec()), Some([1; 32].to_vec()), true).await;
+        let response = poseidon_hash(client, [1; 32].to_vec()).await;
         dbg!(Hash::try_from(response.hash.as_slice()).unwrap());
     }
 

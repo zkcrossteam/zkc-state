@@ -224,7 +224,7 @@ impl TryFrom<&[u8]> for LeafData {
 
 impl From<LeafData> for Vec<u8> {
     fn from(value: LeafData) -> Self {
-        value.0.into()
+        value.0
     }
 }
 
@@ -509,7 +509,7 @@ impl Default for DataHashRecord {
         let data = LeafData::default();
         let hash = Hash::hash_data(&(data.0));
         Self {
-            hash: hash.into(),
+            hash,
             data: data.into(),
         }
     }
