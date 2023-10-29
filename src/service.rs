@@ -40,7 +40,7 @@ pub struct MongoCollection<T, R> {
 
 impl<T, R> MongoCollection<T, R> {
     fn get_database_name() -> String {
-        "zkwasmkvpair".to_string()
+        "zkwasm-mongo-merkle".to_string()
     }
 
     fn get_merkle_collection_name(contract_id: &ContractId) -> String {
