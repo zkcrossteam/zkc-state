@@ -268,13 +268,10 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
         let filter = doc! {"_id": Self::get_current_root_object_id()};
         let update = doc! {
             "$set": {
+                "index": u64_to_bson(0),
                 "hash": to_bson(&record.hash).unwrap(),
                 "left": to_bson(&record.left).unwrap(),
                 "right": to_bson(&record.right).unwrap(),
-            },
-            // We use this to track the number of root updates.
-            "$inc": {
-                "index": 1i64,
             },
         };
         let options = UpdateOptions::builder().upsert(true).build();

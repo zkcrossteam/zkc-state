@@ -322,9 +322,10 @@ where
 }
 
 pub fn u64_to_bson(x: u64) -> Bson {
-    mongodb::bson::ser::Serializer::new()
-        .serialize_u64(x)
-        .unwrap()
+    Bson::Binary(mongodb::bson::Binary {
+        subtype: BinarySubtype::Generic,
+        bytes: x.to_le_bytes().to_vec(),
+    })
 }
 
 pub fn hash_to_bson(x: &Hash) -> Bson {
@@ -343,6 +344,8 @@ pub struct MongoMerkle {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, Eq, PartialEq)]
 pub struct MerkleRecord {
+    #[serde(serialize_with = "self::serialize_u64_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_u64_as_binary")]
     pub index: u64,
     pub hash: Hash,
     pub left: Hash,
