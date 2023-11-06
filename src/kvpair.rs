@@ -618,8 +618,8 @@ impl MongoMerkle {
             .client
             .set_leaf(Request::new(SetLeafRequest {
                 index,
-                leaf_data_hash: None,
-                leaf_data: Some(leaf_data.0),
+                hash: None,
+                data: Some(leaf_data.0),
                 proof_type,
                 contract_id: Some(self.contract_id.into()),
             }))

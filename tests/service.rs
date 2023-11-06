@@ -128,10 +128,10 @@ async fn set_leaf(
     let response = client
         .set_leaf(Request::new(SetLeafRequest {
             index,
-            leaf_data: Some(leaf_data),
+            data: Some(leaf_data),
             proof_type,
             contract_id: None,
-            leaf_data_hash: None,
+            hash: None,
         }))
         .await
         .unwrap();
@@ -202,8 +202,8 @@ async fn test_set_leaf_hash_that_is_not_a_field_element() {
         let response = client
             .set_leaf(Request::new(SetLeafRequest {
                 index: 2_u64.pow(MERKLE_TREE_HEIGHT.try_into().unwrap()) - 1,
-                leaf_data: Some([0xff; 32].to_vec()),
-                leaf_data_hash: Some([0xff; 32].to_vec()),
+                data: Some([0xff; 32].to_vec()),
+                hash: Some([0xff; 32].to_vec()),
                 proof_type: ProofType::ProofEmpty.into(),
                 contract_id: None,
             }))
