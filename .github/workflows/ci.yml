@@ -31,7 +31,7 @@ jobs:
           load: true
           set: |
             *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
+            *.cache-to=type=gha,mode=max,compression=zstd
       - uses: isbang/compose-action@v1.5.0
       - uses: dsherret/rust-toolchain-file@v1
       - run: cargo test
