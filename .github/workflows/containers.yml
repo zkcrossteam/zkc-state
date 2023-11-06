@@ -31,3 +31,7 @@ jobs:
           context: "${{ matrix.context }}"
           push: ${{ github.event_name != 'pull_request' }}
           tags: "${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:latest"
+          cache-from: |
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:cache
+          cache-to: |
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:cache
