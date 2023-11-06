@@ -88,6 +88,8 @@ impl From<[u8; 32]> for ContractId {
     }
 }
 
+/// Note that the hash here must represents a valid field element.
+/// TODO: Maybe we should wrap Fr instead of [u8; 32] here.
 #[derive(Copy, Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct Hash(
     #[serde(serialize_with = "self::serialize_bytes_as_binary")]
@@ -100,9 +102,10 @@ impl TryFrom<&[u8]> for Hash {
     type Error = Error;
 
     fn try_from(a: &[u8]) -> Result<Hash, Self::Error> {
+        let a: [u8; 32] = a.try_into().map_err(|_e| {
+            Error::InvalidArgument("Hash malformed (must be [u8; 32])".to_string())
+        })?;
         a.try_into()
-            .map_err(|_e| Error::InvalidArgument("Hash malformed (must be [u8; 32])".to_string()))
-            .map(Hash)
     }
 }
 
@@ -112,6 +115,32 @@ impl TryFrom<Vec<u8>> for Hash {
 
     fn try_from(a: Vec<u8>) -> Result<Hash, Self::Error> {
         a.as_slice().try_into()
+    }
+}
+
+// Check also [u8; 32] is a valid field element.
+impl TryFrom<[u8; 32]> for Hash {
+    type Error = Error;
+
+    fn try_from(hash: [u8; 32]) -> Result<Hash, Self::Error> {
+        let result = Fr::from_repr(hash);
+        if result.is_none().into() {
+            return Err(Error::InvalidArgument("Not a valid field element".to_string()));
+        }
+
+        Ok(Self(result.unwrap().to_repr()))
+    }
+}
+
+impl From<Fr> for Hash {
+    fn from(f: Fr) -> Self {
+        Self(f.to_repr())
+    }
+}
+
+impl From<Hash> for Fr {
+    fn from(h: Hash) -> Fr {
+        Fr::from_repr(h.0).unwrap()
     }
 }
 
@@ -127,21 +156,13 @@ impl From<Hash> for Vec<u8> {
     }
 }
 
-impl From<[u8; 32]> for Hash {
-    fn from(hash: [u8; 32]) -> Self {
-        Self(hash)
-    }
-}
-
 impl Hash {
     pub fn hash_children(left: &Self, right: &Self) -> Self {
-        let a = left.0;
-        let b = right.0;
         let mut hasher = gen_hasher();
-        let a = Fr::from_repr(a).unwrap();
-        let b = Fr::from_repr(b).unwrap();
+        let a = Fr::from(*left);
+        let b = Fr::from(*right);
         hasher.update(&[a, b]);
-        hasher.squeeze().to_repr().into()
+        hasher.squeeze().into()
     }
 
     pub fn hash_data(data: &[u8]) -> Self {
@@ -158,7 +179,7 @@ impl Hash {
         let values: [Fr; 2] = batchdata.try_into().unwrap();
         let mut hasher = gen_hasher();
         hasher.update(&values);
-        hasher.squeeze().to_repr().into()
+        hasher.squeeze().into()
     }
 
     /// depth start from 0 up to Self::height(). Example 20 height MongoMerkle, root depth=0, leaf depth=20
@@ -167,7 +188,7 @@ impl Hash {
             Ok(DEFAULT_HASH_VEC[MERKLE_TREE_HEIGHT - depth])
         } else {
             Err(MerkleError::new(
-                [0; 32].into(),
+                [0; 32].try_into().unwrap(),
                 depth as u64,
                 MerkleErrorCode::InvalidDepth,
             ))
@@ -451,9 +472,9 @@ impl MerkleRecord {
     pub fn new(index: u64) -> Self {
         MerkleRecord {
             index,
-            hash: [0; 32].into(),
-            left: [0; 32].into(),
-            right: [0; 32].into(),
+            hash: [0; 32].try_into().unwrap(),
+            left: [0; 32].try_into().unwrap(),
+            right: [0; 32].try_into().unwrap(),
         }
     }
 
@@ -483,7 +504,7 @@ impl MerkleRecord {
         let height = (index + 1).ilog2() as usize;
         let default = Hash::get_default_hash(height)?;
         let child_hash = if height == MERKLE_TREE_HEIGHT {
-            [0; 32].into()
+            [0; 32].try_into().unwrap()
         } else {
             Hash::get_default_hash(height + 1)?
         };

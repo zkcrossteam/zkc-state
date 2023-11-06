@@ -123,7 +123,7 @@ async fn set_leaf(
     leaf_data: LeafData,
     proof_type: ProofType,
 ) -> SetLeafResponse {
-    let leaf_data: Vec<u8> = leaf_data.0.into();
+    let leaf_data: Vec<u8> = leaf_data.0;
     let proof_type = proof_type.into();
     let response = client
         .set_leaf(Request::new(SetLeafRequest {

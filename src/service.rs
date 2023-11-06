@@ -640,7 +640,11 @@ impl KvPair for MongoKvPair {
         let (data, hash, should_insert_into_db): (Vec<u8>, Hash, bool) =
             match (request.leaf_data, request.leaf_data_hash) {
                 (Some(data), Some(hash)) => (data, hash.try_into()?, true),
-                (Some(data), None) => (data.clone(), crate::poseidon::hash(&data)?.into(), true),
+                (Some(data), None) => (
+                    data.clone(),
+                    crate::poseidon::hash(&data)?.try_into().unwrap(),
+                    true,
+                ),
                 (None, Some(hash)) => {
                     let hash = hash
                         .try_into()

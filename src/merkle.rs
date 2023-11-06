@@ -32,7 +32,7 @@ pub mod utils {
         let node_type = get_node_type(index, height);
         if node_type == NodeType::NodeInvalid {
             Err(MerkleError::new(
-                [0; 32].into(),
+                [0; 32].try_into().unwrap(),
                 index,
                 MerkleErrorCode::InvalidIndex,
             ))
@@ -56,7 +56,7 @@ pub mod utils {
         let node_type = get_node_type(index, height);
         if node_type != NodeType::NodeLeaf {
             Err(MerkleError::new(
-                [0; 32].into(),
+                [0; 32].try_into().unwrap(),
                 index,
                 MerkleErrorCode::InvalidLeafIndex,
             ))
