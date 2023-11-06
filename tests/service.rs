@@ -197,6 +197,30 @@ async fn test_get_leaf() {
 }
 
 #[tokio::test]
+async fn test_set_leaf_hash_that_is_not_a_field_element() {
+    async fn test(client: &mut KvPairClient<Channel>) {
+        let response = client
+            .set_leaf(Request::new(SetLeafRequest {
+                index: 2_u64.pow(MERKLE_TREE_HEIGHT.try_into().unwrap()) - 1,
+                leaf_data: Some([0xff; 32].to_vec()),
+                leaf_data_hash: Some([0xff; 32].to_vec()),
+                proof_type: ProofType::ProofEmpty.into(),
+                contract_id: None,
+            }))
+            .await;
+        dbg!(&response);
+        match response {
+            Err(_) => {}
+            _ => panic!("Should have returned error on invalid hash"),
+        }
+    }
+    let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;
+    test(&mut client).await;
+    tx.send(()).unwrap();
+    join_handler.await.unwrap()
+}
+
+#[tokio::test]
 async fn test_set_and_get_leaf() {
     async fn test(client: &mut KvPairClient<Channel>) {
         let index = 2_u64.pow(MERKLE_TREE_HEIGHT.try_into().unwrap()) - 1;

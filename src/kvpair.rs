@@ -125,7 +125,9 @@ impl TryFrom<[u8; 32]> for Hash {
     fn try_from(hash: [u8; 32]) -> Result<Hash, Self::Error> {
         let result = Fr::from_repr(hash);
         if result.is_none().into() {
-            return Err(Error::InvalidArgument("Not a valid field element".to_string()));
+            return Err(Error::InvalidArgument(
+                "Not a valid field element".to_string(),
+            ));
         }
 
         Ok(Self(result.unwrap().to_repr()))
@@ -735,5 +737,17 @@ impl MerkleTree<Hash, MERKLE_TREE_HEIGHT> for MongoMerkle {
                 MerkleError::new(leaf.hash, leaf.index, MerkleErrorCode::InvalidOther)
             })?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_converting_invalid_field_element_to_hash() {
+        assert!(Hash::try_from([0xff; 32]).is_err());
+        assert!(Hash::try_from([0xff; 32].as_slice()).is_err());
+        assert!(Hash::try_from([0xff; 32].to_vec()).is_err());
     }
 }
