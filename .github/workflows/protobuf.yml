@@ -15,11 +15,11 @@ jobs:
             experimental-features = nix-command flakes
       - run: |
           set -xeuo pipefail
-          nix develop -c protoc --version
+          protoc_version="$(nix develop -c protoc --version | awk '{print $NF}')"
           nix develop -c ./scripts/update_protos.sh
           if ! git diff --exit-code; then
             echo "Protobuf files in a inconsistent state"
-            echo "Install protoc from https://github.com/protocolbuffers/protobuf/releases/tag/v${{ env.PROTOC_VERSION }}"
+            echo "Install protoc from https://github.com/protocolbuffers/protobuf/releases/tag/v${protoc_version}"
             echo "And run ./scripts/update_protos.sh and commit updates to git repo"
             exit 1
           fi
