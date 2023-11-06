@@ -16,16 +16,23 @@ services:
       - 50000:50000
 
   auth:
-    build: ./services/auth
+    build:
+      context: ./services/auth
+      args:
+        - GOPROXY=${GOPROXY}
     environment:
       - MONGODB_URI=mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}@mongodb:27017
 
   kvpair:
     build:
       context: .
+      args:
+        - CRATESIOMIRROR=${CRATESIOMIRROR}
     ports:
       - 50051:50051
     environment:
+      - RUST_LOG=${RUST_LOG}
+      - RUST_BACKTRACE=${RUST_BACKTRACE}
       - MONGODB_URI=mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}@mongodb:27017
       - KVPAIR_PORT=50051
       - KVPAIR_GRPC_SERVER_URL=http://localhost:50051
