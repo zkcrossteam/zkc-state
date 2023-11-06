@@ -34,4 +34,4 @@ jobs:
           cache-from: |
             type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:cache
           cache-to: |
-            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:cache
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:cache,mode=max,compression=zstd
