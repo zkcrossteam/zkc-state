@@ -1,4 +1,5 @@
 use crate::merkle::get_node_type;
+use crate::poseidon::gen_merkle_hasher;
 use crate::proto::kv_pair_client::KvPairClient;
 
 use crate::proto::node::NodeData;
@@ -11,7 +12,7 @@ use crate::proto::{
 use crate::Error;
 
 use super::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleTree};
-use super::poseidon::gen_hasher;
+use super::poseidon::gen_poseidon_hasher;
 use ff::PrimeField;
 use futures::executor;
 use halo2_proofs::pairing::bn256::Fr;
@@ -35,8 +36,10 @@ lazy_static::lazy_static! {
     pub static ref DEFAULT_HASH_VEC: [Hash; MERKLE_TREE_HEIGHT + 1] = {
         let mut leaf_hash = MongoMerkle::empty_leaf(0).hash();
         let mut default_hash = vec![leaf_hash];
-        for _ in 0..MERKLE_TREE_HEIGHT {
+        for i in 0..MERKLE_TREE_HEIGHT {
+            dbg!(i, &leaf_hash);
             leaf_hash = Hash::hash_children(&leaf_hash, &leaf_hash);
+            dbg!(i, &leaf_hash);
             default_hash.push(leaf_hash);
         }
         default_hash.try_into().unwrap()
@@ -160,11 +163,10 @@ impl From<Hash> for Vec<u8> {
 
 impl Hash {
     pub fn hash_children(left: &Self, right: &Self) -> Self {
-        let mut hasher = gen_hasher();
+        let mut hasher = gen_merkle_hasher();
         let a = Fr::from(*left);
         let b = Fr::from(*right);
-        hasher.update(&[a, b]);
-        hasher.squeeze().into()
+        hasher.update_exact(&[a, b]).into()
     }
 
     pub fn hash_data(data: &[u8]) -> Self {
@@ -179,7 +181,7 @@ impl Hash {
             })
             .collect::<Vec<Fr>>();
         let values: [Fr; 2] = batchdata.try_into().unwrap();
-        let mut hasher = gen_hasher();
+        let mut hasher = gen_poseidon_hasher();
         hasher.update(&values);
         hasher.squeeze().into()
     }
