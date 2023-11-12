@@ -34,12 +34,14 @@ func allowed() *auth.CheckResponse {
 		HttpResponse: &auth.CheckResponse_OkResponse{
 			OkResponse: &auth.OkHttpResponse{
 				Headers: []*core.HeaderValueOption{
-					{
-						Header: &core.HeaderValue{
-							Key:   "x-auth-contract-id",
-							Value: "FX6glXnwnPljB/ayPW/WHDz/EjB21Ewn4um+3wITXoc=",
-						},
-					},
+					// We may add extra header to downstream here.
+					// For example, we can add the following header to give this request a contract id.
+					// {
+					// 	Header: &core.HeaderValue{
+					// 		Key:   "x-auth-contract-id",
+					// 		Value: "FX6glXnwnPljB/ayPW/WHDz/EjB21Ewn4um+3wITXoc=",
+					// 	},
+					// },
 				},
 				HeadersToRemove: []string{"token"},
 			},
