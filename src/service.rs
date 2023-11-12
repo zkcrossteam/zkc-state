@@ -203,7 +203,12 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
         if record.is_some() {
             return Ok(record);
         }
-        Ok(MerkleRecord::get_default_record(index).ok())
+        let default_record = MerkleRecord::get_default_record(index)?;
+        if default_record.hash == *hash {
+            Ok(Some(default_record))
+        } else {
+            Ok(None)
+        }
     }
 
     pub async fn must_get_merkle_record(
