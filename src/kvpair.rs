@@ -323,6 +323,13 @@ where
     }
 }
 
+pub fn u256_to_bson(x: &[u8; 32]) -> Bson {
+    Bson::Binary(mongodb::bson::Binary {
+        subtype: BinarySubtype::Generic,
+        bytes: (*x).into(),
+    })
+}
+
 pub fn u64_to_bson(x: u64) -> Bson {
     Bson::Binary(mongodb::bson::Binary {
         subtype: BinarySubtype::Generic,
@@ -352,6 +359,9 @@ pub struct MerkleRecord {
     pub hash: Hash,
     pub left: Hash,
     pub right: Hash,
+    #[serde(serialize_with = "self::serialize_bytes_as_binary")]
+    #[serde(deserialize_with = "self::deserialize_u256_from_binary")]
+    pub data: [u8; 32],
 }
 
 impl TryFrom<Node> for MerkleRecord {
@@ -482,6 +492,7 @@ impl MerkleRecord {
             hash: [0; 32].try_into().unwrap(),
             left: [0; 32].try_into().unwrap(),
             right: [0; 32].try_into().unwrap(),
+            data: [0; 32],
         }
     }
 
@@ -520,6 +531,7 @@ impl MerkleRecord {
             hash: default,
             left: child_hash,
             right: child_hash,
+            data: [0; 32],
         })
     }
 }

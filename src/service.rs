@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use crate::kvpair::MERKLE_TREE_HEIGHT;
+use crate::kvpair::{u256_to_bson, MERKLE_TREE_HEIGHT};
 use crate::merkle::{get_offset, get_path, get_sibling_index, leaf_check, MerkleNode, MerkleProof};
 use crate::Error;
 
@@ -278,6 +278,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
                 "hash": to_bson(&record.hash).unwrap(),
                 "left": to_bson(&record.left).unwrap(),
                 "right": to_bson(&record.right).unwrap(),
+                "data": u256_to_bson(&record.data)
             },
         };
         let options = UpdateOptions::builder().upsert(true).build();
