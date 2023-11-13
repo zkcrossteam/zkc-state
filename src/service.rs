@@ -232,7 +232,8 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
 
     pub async fn must_get_root_merkle_record(&mut self) -> Result<MerkleRecord, Error> {
         let record = self.get_root_merkle_record().await?;
-        record.ok_or(Error::Precondition("Merkle record not found".to_string()))
+        assert!(record.is_some(), "BUG!!! Root record not found.");
+        Ok(record.unwrap())
     }
 
     pub async fn insert_merkle_record(
