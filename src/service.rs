@@ -674,7 +674,8 @@ impl KvPair for MongoKvPair {
             collection.insert_datahash_record(&datahash_record).await?;
         }
 
-        let merkle_record = MerkleRecord::new_leaf(index, hash);
+        let mut merkle_record = MerkleRecord::new_leaf(index, hash);
+        merkle_record.data = hash.0;
 
         let proof = collection.set_leaf_and_get_proof(&merkle_record).await?;
         let proof = if request.proof_type == ProofType::ProofV0 as i32 {

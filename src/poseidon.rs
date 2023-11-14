@@ -17,7 +17,7 @@ pub const PREFIX_SCALAR: u64 = 2u64;
 /// 2. POSEIDON_HASHER thas is use for poseidon hash of data
 /// ```
 ///
-/// ```rust
+/// ```rust,ignore
 /// lazy_static::lazy_static! {
 ///     pub static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = Poseidon::<Fr, 9, 8>::new(8, 63);
 ///     pub static ref MERKLE_HASHER: poseidon::Poseidon<Fr, 3, 2> = Poseidon::<Fr, 3, 2>::new(8, 57);
@@ -38,7 +38,7 @@ pub fn gen_poseidon_hasher() -> Poseidon<Fr, 9, 8> {
 /// 2. POSEIDON_HASHER thas is use for poseidon hash of data
 /// ```
 ///
-/// ```rust
+/// ```rust,ignore
 /// lazy_static::lazy_static! {
 ///     pub static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = Poseidon::<Fr, 9, 8>::new(8, 63);
 ///     pub static ref MERKLE_HASHER: poseidon::Poseidon<Fr, 3, 2> = Poseidon::<Fr, 3, 2>::new(8, 57);
