@@ -620,8 +620,13 @@ impl KvPair for MongoKvPair {
             }
         };
         dbg!(&record, &proof);
-        let datahash_record = collection.must_get_datahash_record(&record.hash()).await?;
-        let node = (record, datahash_record).try_into()?;
+        let datahash_record = collection.get_datahash_record(&record.hash()).await?;
+        let node = match datahash_record {
+            Some(datahash_record) => (record, datahash_record).try_into()?,
+            // If the datahash record corresponding to this hash does not exists,
+            // then we assume the actual data is stored inline to the merkle record.
+            None => Node::new_simple_leaf(record.index(), record.hash()),
+        };
         dbg!(&node);
         collection.commit().await.map_err(Error::from)?;
         Ok(Response::new(GetLeafResponse {
@@ -641,42 +646,38 @@ impl KvPair for MongoKvPair {
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
 
-        let (data, hash, should_insert_into_db): (Vec<u8>, Hash, bool) =
-            match (request.data, request.hash) {
-                (Some(data), Some(hash)) => (data, hash.try_into()?, true),
-                (Some(data), None) => (
-                    data.clone(),
-                    crate::poseidon::hash(&data)?.try_into().unwrap(),
-                    true,
-                ),
-                (None, Some(hash)) => {
-                    let hash = hash
-                        .try_into()
-                        .map_err(|_e| Status::invalid_argument("Invalid hash"))?;
-                    let record = collection
-                        .get_datahash_record(&hash)
-                        .await?
-                        .ok_or(Status::invalid_argument("No data associated to this hash"))?;
-                    (record.data, hash, false)
-                }
-                (None, None) => {
-                    return Err(Status::invalid_argument(
-                        "Both data and data hash are not provided",
-                    ))
-                }
-            };
+        let (merkle_record, node): (MerkleRecord, Node) = match (request.data, request.hash) {
+            (Some(data), hash) => {
+                let hash = if let Some(hash) = hash {
+                    hash.try_into()?
+                } else {
+                    crate::poseidon::hash(&data)?.try_into().unwrap()
+                };
+                let merkle_record = MerkleRecord::new_leaf(index, hash);
 
-        let datahash_record = DataHashRecord {
-            hash,
-            data: data.clone(),
+                let datahash_record = DataHashRecord {
+                    hash,
+                    data: data.clone(),
+                };
+                collection.insert_datahash_record(&datahash_record).await?;
+                let node = (merkle_record, datahash_record).try_into()?;
+                (merkle_record, node)
+            }
+            (None, Some(hash)) => {
+                // If data are not passed here, we assume that hash is the actual data.
+                // This corresponds to the simple_set in zkWasm-rust.
+                let hash = Hash::try_from(hash)?;
+                let merkle_record = MerkleRecord::new_leaf(index, hash);
+                (merkle_record, Node::new_simple_leaf(index, hash))
+            }
+            (None, None) => {
+                return Err(Status::invalid_argument(
+                    "Both data and data hash are not provided",
+                ))
+            }
         };
-        if should_insert_into_db {
-            collection.insert_datahash_record(&datahash_record).await?;
-        }
 
-        let mut merkle_record = MerkleRecord::new_leaf(index, hash);
-        merkle_record.data = hash.0;
-
+        dbg!(&merkle_record);
         let proof = collection.set_leaf_and_get_proof(&merkle_record).await?;
         let proof = if request.proof_type == ProofType::ProofV0 as i32 {
             Some(Proof {
@@ -686,8 +687,6 @@ impl KvPair for MongoKvPair {
         } else {
             None
         };
-        dbg!(&merkle_record);
-        let node = (merkle_record, datahash_record).try_into()?;
         collection.commit().await.map_err(Error::from)?;
         dbg!(&node);
         Ok(Response::new(SetLeafResponse {

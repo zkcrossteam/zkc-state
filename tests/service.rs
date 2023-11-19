@@ -252,6 +252,73 @@ async fn test_set_and_get_leaf() {
 }
 
 #[tokio::test]
+async fn test_simple_set_and_get_leaf() {
+    async fn get_leaf_hash(client: &mut KvPairClient<Channel>, index: u64) -> Vec<u8> {
+        let proof_type = ProofType::ProofEmpty.into();
+        let response = client
+            .get_leaf(Request::new(GetLeafRequest {
+                index,
+                hash: None,
+                proof_type,
+                contract_id: None,
+            }))
+            .await
+            .unwrap();
+        dbg!(&response);
+
+        let response = response.into_inner();
+
+        assert!(response.node.is_some());
+        let node = response.node.unwrap();
+        assert_eq!(node.index, index);
+        assert_eq!(node.node_type, NodeType::NodeLeaf as i32);
+        match node.node_data {
+            Some(NodeData::Data(data)) => {
+                assert!(data.is_empty())
+            }
+            _ => panic!("Invalid node data"),
+        }
+        node.hash
+    }
+
+    async fn set_leaf_hash(client: &mut KvPairClient<Channel>, index: u64, leaf_hash: Vec<u8>) {
+        let proof_type = ProofType::ProofEmpty.into();
+        let response = client
+            .set_leaf(Request::new(SetLeafRequest {
+                index,
+                data: None,
+                proof_type,
+                contract_id: None,
+                hash: Some(leaf_hash.clone()),
+            }))
+            .await
+            .unwrap();
+        dbg!(&response);
+        let response = response.into_inner();
+
+        assert!(response.node.is_some());
+        let node = response.node.unwrap();
+        assert_eq!(node.index, index);
+        assert_eq!(node.node_type, NodeType::NodeLeaf as i32);
+        match node.node_data {
+            Some(NodeData::Data(data)) => {
+                assert!(data.is_empty())
+            }
+            _ => panic!("Invalid node data"),
+        }
+    }
+
+    let index = 2_u64.pow(MERKLE_TREE_HEIGHT.try_into().unwrap()) - 1;
+    let leaf_hash: Vec<u8> = [42_u8; 32].into();
+    let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;
+    set_leaf_hash(&mut client, index, leaf_hash.clone()).await;
+    let res = get_leaf_hash(&mut client, index).await;
+    assert_eq!(res, leaf_hash);
+    tx.send(()).unwrap();
+    join_handler.await.unwrap()
+}
+
+#[tokio::test]
 async fn test_poseidon_hash() {
     async fn test(client: &mut KvPairClient<Channel>) {
         let response = poseidon_hash(client, [1; 32].to_vec()).await;

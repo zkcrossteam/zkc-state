@@ -126,14 +126,7 @@ impl TryFrom<[u8; 32]> for Hash {
     type Error = Error;
 
     fn try_from(hash: [u8; 32]) -> Result<Hash, Self::Error> {
-        let result = Fr::from_repr(hash);
-        if result.is_none().into() {
-            return Err(Error::InvalidArgument(
-                "Not a valid field element".to_string(),
-            ));
-        }
-
-        Ok(Self(result.unwrap().to_repr()))
+        Ok(Self(hash))
     }
 }
 
@@ -754,6 +747,20 @@ impl MerkleTree<Hash, MERKLE_TREE_HEIGHT> for MongoMerkle {
                 MerkleError::new(leaf.hash, leaf.index, MerkleErrorCode::InvalidOther)
             })?;
         Ok(())
+    }
+}
+
+impl Node {
+    /// This corresponds to data in simple_get/simple_set of zkWasm-rust.
+    /// Here we create a Node that has empty vector as its data, although
+    /// technically an empty vector does not hash to the hash in the merkle record.
+    pub fn new_simple_leaf(index: u64, hash: Hash) -> Self {
+        Node {
+            index,
+            hash: hash.into(),
+            node_type: NodeType::NodeLeaf.into(),
+            node_data: Some(NodeData::Data(vec![])),
+        }
     }
 }
 
