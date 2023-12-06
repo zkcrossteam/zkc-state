@@ -1,4 +1,4 @@
-`zkc_state_manager` is a rust program to manage zkcross states.
+The `zkc_state_service` is a service designed for efficiently storing and retrieving key-value pairs. It is mainly used to serve as a state storage for zkWasm applications. Internally, we use Merkle Trees and Poseidon hashes to compute the node hash because they are more friendly and efficient for proving within the zk circuit.
 
 Users may use [gRPC](https://grpc.io/) or [REST](https://en.wikipedia.org/wiki/Representational_state_transfer) interfaces to store their data.
 
