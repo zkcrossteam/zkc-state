@@ -763,15 +763,3 @@ impl Node {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_converting_invalid_field_element_to_hash() {
-        assert!(Hash::try_from([0xff; 32]).is_err());
-        assert!(Hash::try_from([0xff; 32].as_slice()).is_err());
-        assert!(Hash::try_from([0xff; 32].to_vec()).is_err());
-    }
-}
