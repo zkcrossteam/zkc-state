@@ -746,4 +746,49 @@ impl KvPair for MongoKvPair {
         let hash = crate::poseidon::hash(&data_to_hash)?;
         Ok(Response::new(PoseidonHashResponse { hash: hash.into() }))
     }
+
+    async fn data_hash_record(
+        &self,
+        request: Request<DataHashRecordRequest>,
+    ) -> std::result::Result<Response<DataHashRecordResponse>, Status> {
+        dbg!(&request);
+        let contract_id = self.get_contract_id(&request, &request.get_ref().contract_id)?;
+        let request = request.into_inner();
+        let mut collection = self.new_collection(&contract_id, false).await?;
+        let record = match request.mode {
+            Some(mode) if mode == DataHashRecordMode::ModeFetch as i32 => match request.hash {
+                Some(hash) => {
+                    collection
+                        .must_get_datahash_record(&hash.try_into()?)
+                        .await?
+                }
+                _ => return Err(Status::invalid_argument("Hash is required for fetch mode")),
+            },
+            Some(mode) if mode == DataHashRecordMode::ModeStore as i32 => {
+                match (request.data, request.hash) {
+                    (Some(data), Some(hash)) => {
+                        let record = DataHashRecord::new(hash.try_into()?, data);
+                        dbg!(&record);
+                        collection.insert_datahash_record(&record).await?;
+                        record
+                    }
+                    _ => {
+                        return Err(Status::invalid_argument(
+                            "Both data and hash are required for store mode",
+                        ))
+                    }
+                }
+            }
+            _ => {
+                return Err(Status::invalid_argument(format!(
+                    "Invalid mode for data hash record, fetch or store expected, given {:?}",
+                    request.mode
+                )))
+            }
+        };
+        Ok(Response::new(DataHashRecordResponse {
+            hash: record.hash.into(),
+            data: record.data,
+        }))
+    }
 }

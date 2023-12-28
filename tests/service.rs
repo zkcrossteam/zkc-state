@@ -5,6 +5,8 @@ use zkc_state_manager::kvpair::MERKLE_TREE_HEIGHT;
 use zkc_state_manager::proto::kv_pair_client::KvPairClient;
 use zkc_state_manager::proto::kv_pair_server::KvPairServer;
 use zkc_state_manager::proto::node::NodeData;
+use zkc_state_manager::proto::DataHashRecordMode;
+use zkc_state_manager::proto::DataHashRecordRequest;
 use zkc_state_manager::proto::GetLeafRequest;
 use zkc_state_manager::proto::GetLeafResponse;
 use zkc_state_manager::proto::GetRootRequest;
@@ -323,6 +325,46 @@ async fn test_poseidon_hash() {
     async fn test(client: &mut KvPairClient<Channel>) {
         let response = poseidon_hash(client, [1; 32].to_vec()).await;
         dbg!(Hash::try_from(response.hash.as_slice()).unwrap());
+    }
+
+    let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;
+    test(&mut client).await;
+    tx.send(()).unwrap();
+    join_handler.await.unwrap()
+}
+
+#[tokio::test]
+async fn test_store_and_fetch_data_hash_record() {
+    async fn test(client: &mut KvPairClient<Channel>) {
+        let data = [1; 32].to_vec();
+        let hash = [2; 32].to_vec();
+        let response = client
+            .data_hash_record(Request::new(DataHashRecordRequest {
+                contract_id: None,
+                hash: Some(hash.clone()),
+                data: Some(data.clone()),
+                mode: Some(DataHashRecordMode::ModeStore as i32),
+            }))
+            .await
+            .unwrap();
+        dbg!(&response);
+        let response = response.into_inner();
+        assert_eq!(response.hash, hash);
+        assert_eq!(response.data, data);
+
+        let response = client
+            .data_hash_record(Request::new(DataHashRecordRequest {
+                contract_id: None,
+                hash: Some(hash.clone()),
+                data: None,
+                mode: Some(DataHashRecordMode::ModeFetch as i32),
+            }))
+            .await
+            .unwrap();
+        dbg!(&response);
+        let response = response.into_inner();
+        assert_eq!(response.hash, hash);
+        assert_eq!(response.data, data);
     }
 
     let (join_handler, mut client, tx) = start_server_get_client_and_cancellation_handler().await;

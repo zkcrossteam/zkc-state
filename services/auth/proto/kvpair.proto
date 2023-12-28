@@ -107,6 +107,30 @@ message PoseidonHashRequest {
 
 message PoseidonHashResponse { bytes hash = 1; }
 
+enum DataHashRecordMode {
+  ModeUnspecified = 0; // Default enum value, don't use this
+  ModeStore = 1;
+  ModeFetch = 2;
+}
+
+message DataHashRecordRequest {
+  optional bytes contract_id = 1;
+  // The hash of the data we want to save to the database.
+  // In ModeFetch, we will fetch data hash record with this hash.
+  // In ModeStore, we will save data hash record with this hash and data below.
+  optional bytes hash = 2;
+  // The binary data that we want save to the database.
+  optional bytes data = 3;
+  // The operation mode, may be ModeFetch or ModeStore to indicate
+  // whether we are storing or fetching the data.
+  optional DataHashRecordMode mode = 4;
+}
+
+message DataHashRecordResponse {
+  bytes hash = 1;
+  bytes data = 2;
+}
+
 service KVPair {
   rpc GetRoot(GetRootRequest) returns (GetRootResponse) {
     option (google.api.http) = {
@@ -143,6 +167,11 @@ service KVPair {
   rpc PoseidonHash(PoseidonHashRequest) returns (PoseidonHashResponse) {
     option (google.api.http) = {
       post : "/v1/poseidon"
+    };
+  }
+  rpc DataHashRecord(DataHashRecordRequest) returns (DataHashRecordResponse) {
+    option (google.api.http) = {
+      post : "/v1/datahashrecord"
     };
   }
 }
