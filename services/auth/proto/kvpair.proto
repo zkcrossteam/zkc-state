@@ -107,6 +107,38 @@ message PoseidonHashRequest {
 
 message PoseidonHashResponse { bytes hash = 1; }
 
+enum DataHashRecordMode {
+  ModeUnspecified = 0; // Default enum value, don't use this
+  ModeStore = 1;
+  ModeFetch = 2;
+}
+
+message DataHashRecordRequest {
+  optional bytes contract_id = 1;
+  // The original data that we want to hash, may be any binary data.
+  // May be different from the data we actually used to hash.
+  // See description below.
+  optional bytes data = 2;
+  // Because the original data we want to hash can be any binary data,
+  // it may not be a valid input to the poseidon hash function
+  // (which takes an array of field elements as input), we may need to
+  // pad or modify the original data to hash it. This parameter is the
+  // transformed data which can be feeded into poseidon hash function directly.
+  // As the way of transforming the of original data is non-standard,
+  // the caller MUST pass the transformed data here. It is guarenteed
+  // that the hash returned here is stable.
+  optional bytes hash = 3;
+  // Whether to persist the data and data hash to the database.
+  // This is useful when laterly we want to look up the data from the data hash.
+  optional DataHashRecordMode mode = 4;
+}
+
+
+message DataHashRecordResponse { 
+  bytes hash = 1;
+  bytes data = 2;
+}
+
 service KVPair {
   rpc GetRoot(GetRootRequest) returns (GetRootResponse) {
     option (google.api.http) = {
@@ -143,6 +175,11 @@ service KVPair {
   rpc PoseidonHash(PoseidonHashRequest) returns (PoseidonHashResponse) {
     option (google.api.http) = {
       post : "/v1/poseidon"
+    };
+  }
+  rpc DataHashRecord(DataHashRecordRequest) returns (DataHashRecordResponse) {
+    option (google.api.http) = {
+      post : "/v1/datahashrecord"
     };
   }
 }

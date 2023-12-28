@@ -207,6 +207,37 @@ returns
  }
 }
 ```
+
+### Store data hash record
+
+```bash
+curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"hash":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADCAE=","data":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","mode":"ModeStore"}' "http://localhost:50000/v1/datahashrecord"
+```
+
+returns
+
+```
+{
+ "hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADCAE=",
+ "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE="
+}
+```
+
+### Fetch data hash record
+
+```bash
+curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"hash":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADCAE=","mode":"ModeFetch"}' "http://localhost:50000/v1/datahashrecord"
+```
+
+returns
+
+```
+{
+ "hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADCAE=",
+ "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE="
+}
+```
+
 ## How to calculate index manually
 ```
 let address = self.address.rules[0].u64_value().unwrap() as u32;
