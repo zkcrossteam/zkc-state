@@ -1,5 +1,6 @@
 FROM docker.io/rust:1.66-alpine as builder
-ARG CRATESIOMIRROR
+ARG CRATESIOMIRROR=
+ARG CARGOPROFILE=release
 RUN apk add --no-cache musl-dev protoc protobuf-dev
 
 WORKDIR /usr/src/app
@@ -11,10 +12,10 @@ RUN if [ -z "$CRATESIOMIRROR" ]; then exit 0; fi; \
 # Cache rust dependencies
 # https://stackoverflow.com/questions/58473606/cache-rust-dependencies-with-docker-build
 COPY ./rust-toolchain* ./Cargo.* ./
-RUN mkdir ./src && echo 'fn main() { println!("Dummy!"); }' > ./src/main.rs && cargo build --release && rm -rf ./src
+RUN mkdir ./src && echo 'fn main() { println!("Dummy!"); }' > ./src/main.rs && cargo build --profile "$CARGOPROFILE" && rm -rf ./src
 
 COPY ./ ./
-RUN cargo install --frozen --offline --path .
+RUN cargo install --frozen --offline --profile "$CARGOPROFILE" --path .
 
 FROM docker.io/alpine:3.18
 COPY --from=builder /usr/local/cargo/bin/zkc_state_manager /usr/local/bin/myapp

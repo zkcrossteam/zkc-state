@@ -19,7 +19,7 @@ services:
     build:
       context: ./services/auth
       args:
-        - GOPROXY=${GOPROXY}
+        - GOPROXY=${GOPROXY:-}
     environment:
       - MONGODB_URI=mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}@mongodb:27017
 
@@ -27,7 +27,8 @@ services:
     build:
       context: .
       args:
-        - CRATESIOMIRROR=${CRATESIOMIRROR}
+        - CRATESIOMIRROR=${CRATESIOMIRROR:-}
+        - CARGOPROFILE=${CARGOPROFILE:-}
     ports:
       - 50051:50051
     environment:

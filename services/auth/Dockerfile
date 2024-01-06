@@ -1,7 +1,7 @@
 FROM docker.io/golang:1.20-alpine as builder
 
 WORKDIR /app
-ARG GOPROXY
+ARG GOPROXY=
 
 COPY server ./server
 COPY go.mod go.sum ./
