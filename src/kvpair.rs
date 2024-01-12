@@ -176,7 +176,8 @@ impl Hash {
         let values: [Fr; 2] = batchdata.try_into().unwrap();
         let mut hasher = gen_poseidon_hasher();
         hasher.update(&values);
-        hasher.squeeze().into()
+        let result = hasher.squeeze();
+        result.into()
     }
 
     /// depth start from 0 up to Self::height(). Example 20 height MongoMerkle, root depth=0, leaf depth=20

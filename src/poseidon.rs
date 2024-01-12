@@ -54,7 +54,44 @@ pub fn gen_merkle_hasher() -> Poseidon<Fr, 3, 2> {
     Poseidon::<Fr, 3, 2>::new(8, 57)
 }
 
+pub fn hash_field_elements(frs: &[Fr]) -> <Fr as PrimeField>::Repr {
+    dbg!(frs);
+    let mut hasher = gen_poseidon_hasher();
+    hasher.update(frs);
+    let hash = hasher.squeeze().to_repr();
+    dbg!(&hash);
+    hash
+}
+
+/// Hash data from an array of 32 bytes. Since we will split each 32 bytes to
+/// two 16 bytes and convert them into field elements, we do not require each
+/// 32 bytes to be a valid field element.
+/// If feature feature="complex-leaf" is not enabled, then this is the default
+/// hashing behaviour of zkWasm-host-circuits.
+/// https://github.com/DelphinusLab/zkWasm-host-circuits/pull/75/files
+pub fn hash_with_padding(data_to_hash: &[u8]) -> Result<<Fr as PrimeField>::Repr, Error> {
+    let num_of_bytes: usize = 32;
+    if data_to_hash.len() % num_of_bytes != 0 {
+        return Err(Error::InvalidArgument(
+            "Invalid data to hash, must be an array of field elements".to_string(),
+        ));
+    }
+    let frs = data_to_hash
+        .chunks(16)
+        .map(|x| {
+            let mut v = x.clone().to_vec();
+            v.extend_from_slice(&[0u8; 16]);
+            let f = v.try_into().unwrap();
+            Fr::from_repr(f).unwrap()
+        })
+        .collect::<Vec<Fr>>();
+    dbg!(&frs);
+    Ok(hash_field_elements(&frs))
+}
+
+/// Hash data from an array of 32 bytes. Each 32 bytes must be a valid field element.
 pub fn hash(data_to_hash: &[u8]) -> Result<<Fr as PrimeField>::Repr, Error> {
+    dbg!(data_to_hash);
     let num_of_bytes: usize = 32;
     if data_to_hash.len() % num_of_bytes != 0 {
         return Err(Error::InvalidArgument(
@@ -74,14 +111,12 @@ pub fn hash(data_to_hash: &[u8]) -> Result<<Fr as PrimeField>::Repr, Error> {
             Ok(f.unwrap())
         })
         .collect::<Result<Vec<Fr>, _>>()?;
-    let mut hasher = gen_poseidon_hasher();
-    hasher.update(&frs);
-    let hash = hasher.squeeze().to_repr();
-    Ok(hash)
+    Ok(hash_field_elements(&frs))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use ff::PrimeField;
     use halo2_proofs::pairing::bn256::Fr;
 
@@ -113,8 +148,17 @@ mod tests {
         hasher.update(&[Fr::zero()]);
         let result = hasher.squeeze().to_repr();
         println!("hash result is {:?}", result);
+        let result2 = hash(&[0; 32]).expect("Hash succeeded");
+        assert_eq!(result, result2);
+    }
 
-        let result2 = super::hash(&[0; 32]).expect("Hash succeeded");
+    #[test]
+    fn test_poseidon_hash_with_padding_equivalent() {
+        let mut hasher = super::gen_poseidon_hasher();
+        hasher.update(&[Fr::zero(), Fr::zero()]);
+        let result = hasher.squeeze().to_repr();
+        println!("hash result is {:?}", result);
+        let result2 = hash_with_padding(&[0; 32]).expect("Hash succeeded");
         assert_eq!(result, result2);
     }
 }
