@@ -19,6 +19,7 @@ services:
     build:
       context: ./services/auth
       args:
+        # Set proxy for go (e.g. https://goproxy.cn)
         - GOPROXY
     environment:
       - MONGODB_URI=mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}@mongodb:27017
@@ -27,7 +28,9 @@ services:
     build:
       context: .
       args:
+        # Use a crates.io mirror (e.g. sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/)
         - CRATESIOMIRROR
+        # Set build profile (https://doc.rust-lang.org/cargo/reference/profiles.html) for cargo (e.g. dev)
         - CARGOPROFILE
     ports:
       - 50051:50051
