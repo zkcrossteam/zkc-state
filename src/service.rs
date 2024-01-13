@@ -651,9 +651,7 @@ impl KvPair for MongoKvPair {
                 let hash = if let Some(hash) = hash {
                     hash.try_into()?
                 } else {
-                    crate::poseidon::hash_with_padding(&data)?
-                        .try_into()
-                        .unwrap()
+                    crate::poseidon::hash(&data)?.try_into().unwrap()
                 };
                 let merkle_record = MerkleRecord::new_leaf(index, hash);
 
@@ -745,7 +743,7 @@ impl KvPair for MongoKvPair {
         let request = request.into_inner();
         // TODO: Should use session here
         let data_to_hash = request.data;
-        let hash = crate::poseidon::hash_with_padding(&data_to_hash)?;
+        let hash = crate::poseidon::hash(&data_to_hash)?;
         Ok(Response::new(PoseidonHashResponse { hash: hash.into() }))
     }
 
