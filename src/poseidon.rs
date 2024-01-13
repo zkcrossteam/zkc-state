@@ -10,13 +10,7 @@ pub const PREFIX_SCALAR: u64 = 2u64;
 
 /// There are three variants of haser used in upstream.
 /// https://github.com/DelphinusLab/zkWasm-host-circuits/blob/e3a2eff4583b2fd8be7fc3e54f2789cbfbfd72d4/src/host/poseidon.rs#L9-L20
-/// This function creates a hasher equivalent to the MERKLE_LEAF_HASHER.
-/// ```text
-/// // We have two hasher here
-/// // 1. MERKLE_HASHER that is used for non sponge hash for hash two merkle siblings
-/// // 2. POSEIDON_HASHER thas is use for poseidon hash of data
-/// ```
-///
+/// This function creates a hasher equivalent to the POSEIDON_HASHER.
 /// ```rust,ignore
 /// lazy_static::lazy_static! {
 ///     pub static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = Poseidon::<Fr, 9, 8>::new(8, 63);
@@ -27,19 +21,13 @@ pub const PREFIX_SCALAR: u64 = 2u64;
 ///     pub static ref MERKLE_LEAF_HASHER_SPEC: poseidon::Spec<Fr, 3, 2> = Spec::new(8, 57);
 /// }
 /// ```
-pub fn gen_poseidon_hasher() -> Poseidon<Fr, 3, 2> {
-    Poseidon::<Fr, 3, 2>::new(8, 57)
+pub fn gen_poseidon_hasher() -> Poseidon<Fr, 9, 8> {
+    Poseidon::<Fr, 9, 8>::new(8, 63)
 }
 
 /// There are three variants of haser used in upstream.
 /// https://github.com/DelphinusLab/zkWasm-host-circuits/blob/e3a2eff4583b2fd8be7fc3e54f2789cbfbfd72d4/src/host/poseidon.rs#L9-L20
 /// This function creates a hasher equivalent to the MERKLE_HASHER.
-/// ```text
-/// // We have two hasher here
-/// // 1. MERKLE_HASHER that is used for non sponge hash for hash two merkle siblings
-/// // 2. POSEIDON_HASHER thas is use for poseidon hash of data
-/// ```
-///
 /// ```rust,ignore
 /// lazy_static::lazy_static! {
 ///     pub static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = Poseidon::<Fr, 9, 8>::new(8, 63);
@@ -51,6 +39,23 @@ pub fn gen_poseidon_hasher() -> Poseidon<Fr, 3, 2> {
 /// }
 /// ```
 pub fn gen_merkle_hasher() -> Poseidon<Fr, 3, 2> {
+    Poseidon::<Fr, 3, 2>::new(8, 57)
+}
+
+/// There are three variants of haser used in upstream.
+/// https://github.com/DelphinusLab/zkWasm-host-circuits/blob/e3a2eff4583b2fd8be7fc3e54f2789cbfbfd72d4/src/host/poseidon.rs#L9-L20
+/// This function creates a hasher equivalent to the MERKLE_LEAF_HASHER.
+/// ```rust,ignore
+/// lazy_static::lazy_static! {
+///     pub static ref POSEIDON_HASHER: poseidon::Poseidon<Fr, 9, 8> = Poseidon::<Fr, 9, 8>::new(8, 63);
+///     pub static ref MERKLE_HASHER: poseidon::Poseidon<Fr, 3, 2> = Poseidon::<Fr, 3, 2>::new(8, 57);
+///     pub static ref MERKLE_LEAF_HASHER: poseidon::Poseidon<Fr, 3, 2> = Poseidon::<Fr, 3, 2>::new(8, 57);
+///     pub static ref POSEIDON_HASHER_SPEC: poseidon::Spec<Fr, 9, 8> = Spec::new(8, 63);
+///     pub static ref MERKLE_HASHER_SPEC: poseidon::Spec<Fr, 3, 2> = Spec::new(8, 57);
+///     pub static ref MERKLE_LEAF_HASHER_SPEC: poseidon::Spec<Fr, 3, 2> = Spec::new(8, 57);
+/// }
+/// ```
+pub fn gen_merkle_leaf_hasher() -> Poseidon<Fr, 3, 2> {
     Poseidon::<Fr, 3, 2>::new(8, 57)
 }
 
@@ -121,10 +126,10 @@ mod tests {
     use halo2_proofs::pairing::bn256::Fr;
 
     #[test]
-    fn test_merkle_hash_zero() {
+    fn test_merkle_leaf_hash_zero() {
         const ZERO_HASHER_SQUEEZE: &str =
             "0x0ac6c5f29f5187473a70dfde3329ef18f01a4d84edb01e6c21813f629a6b5f50";
-        let mut hasher = super::gen_poseidon_hasher();
+        let mut hasher = super::gen_merkle_leaf_hasher();
         hasher.update(&[Fr::zero()]);
         let result = hasher.squeeze();
         println!("hash result is {:?}", result);
@@ -134,7 +139,7 @@ mod tests {
     #[test]
     fn test_poseidon_hash_zero() {
         const ZERO_HASHER_SQUEEZE: &str =
-            "0x0ac6c5f29f5187473a70dfde3329ef18f01a4d84edb01e6c21813f629a6b5f50";
+            "0x03f943aabd67cd7b72a539f3de686c3280c36c572be09f2b9193f5ef78761c6b";
         let mut hasher = super::gen_poseidon_hasher();
         hasher.update(&[Fr::zero()]);
         let result = hasher.squeeze();

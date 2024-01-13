@@ -1,5 +1,5 @@
 use crate::merkle::get_node_type;
-use crate::poseidon::gen_merkle_hasher;
+use crate::poseidon::{gen_merkle_hasher, gen_merkle_leaf_hasher};
 use crate::proto::kv_pair_client::KvPairClient;
 
 use crate::proto::node::NodeData;
@@ -12,7 +12,6 @@ use crate::proto::{
 use crate::Error;
 
 use super::merkle::{MerkleError, MerkleErrorCode, MerkleNode, MerkleTree};
-use super::poseidon::gen_poseidon_hasher;
 use ff::PrimeField;
 use futures::executor;
 use halo2_proofs::pairing::bn256::Fr;
@@ -36,10 +35,8 @@ lazy_static::lazy_static! {
     pub static ref DEFAULT_HASH_VEC: [Hash; MERKLE_TREE_HEIGHT + 1] = {
         let mut leaf_hash = MongoMerkle::empty_leaf(0).hash();
         let mut default_hash = vec![leaf_hash];
-        for i in 0..MERKLE_TREE_HEIGHT {
-            dbg!(i, &leaf_hash);
+        for _ in 0..MERKLE_TREE_HEIGHT {
             leaf_hash = Hash::hash_children(&leaf_hash, &leaf_hash);
-            dbg!(i, &leaf_hash);
             default_hash.push(leaf_hash);
         }
         default_hash.try_into().unwrap()
@@ -174,9 +171,13 @@ impl Hash {
             })
             .collect::<Vec<Fr>>();
         let values: [Fr; 2] = batchdata.try_into().unwrap();
-        let mut hasher = gen_poseidon_hasher();
-        hasher.update(&values);
-        let result = hasher.squeeze();
+        let mut hasher = gen_merkle_leaf_hasher();
+        // Upstream uses `update_exact` to obtain the hash result.
+        // https://github.com/DelphinusLab/zkWasm-host-circuits/pull/75/files#diff-569acc27d1b9b0aa262ff90201af200d25432920c537df3c945fee07271ca2ed
+        // Note that update_exact is not equvilent to update and suqeeze.
+        // Only using update_exact can we obtain the new root in
+        // https://github.com/DelphinusLab/zkWasm-rust/pull/14/files#diff-a1e31cd1b554d09f75df1ea4255aeaf3dff9f3093d378ae7f078368b5b2285b2
+        let result = hasher.update_exact(&values);
         result.into()
     }
 
@@ -762,5 +763,42 @@ impl Node {
             node_type: NodeType::NodeLeaf.into(),
             node_data: Some(NodeData::Data(vec![])),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    pub fn bytes_to_u64(bytes: &[u8; 32]) -> [u64; 4] {
+        let r = bytes
+            .to_vec()
+            .chunks_exact(8)
+            .map(|x| u64::from_le_bytes(x.try_into().unwrap()))
+            .collect::<Vec<_>>();
+        r.try_into().unwrap()
+    }
+
+    #[test]
+    fn show_default_root() {
+        for (i, h) in DEFAULT_HASH_VEC.iter().enumerate() {
+            dbg!(i, hex::encode(h.0));
+        }
+    }
+
+    #[test]
+    fn test_new_merkle_root() {
+        let root = &DEFAULT_HASH_VEC[32].0;
+        assert_eq!(
+            bytes_to_u64(root),
+            // Root obtained from
+            // https://github.com/DelphinusLab/zkWasm-rust/blob/757b1326959474e136e2253d9ced18456195a2d6/src/merkle.rs#L62-L68
+            [
+                14789582351289948625,
+                10919489180071018470,
+                10309858136294505219,
+                2839580074036780766
+            ]
+        );
     }
 }
