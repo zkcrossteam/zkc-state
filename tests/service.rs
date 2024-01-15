@@ -183,10 +183,7 @@ async fn test_get_leaf() {
         assert_eq!(node.node_type, NodeType::NodeLeaf as i32);
         match node.node_data {
             Some(NodeData::Data(data)) => {
-                assert_eq!(
-                    LeafData::try_from(data.as_slice()).unwrap(),
-                    LeafData::default()
-                )
+                assert_eq!(data, Vec::<u8>::new())
             }
             _ => panic!("Invalid node data"),
         }

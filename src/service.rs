@@ -196,6 +196,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
         index: u64,
         hash: &Hash,
     ) -> Result<Option<MerkleRecord>, Error> {
+        dbg!(index, hash);
         let mut filter = doc! {};
         filter.insert("index", u64_to_bson(index));
         filter.insert("hash", hash_to_bson(hash));
@@ -204,6 +205,7 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
             return Ok(record);
         }
         let default_record = MerkleRecord::get_default_record(index)?;
+        dbg!(&default_record, hash);
         if default_record.hash == *hash {
             Ok(Some(default_record))
         } else {
@@ -416,8 +418,8 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
         hash: &Hash,
     ) -> Result<Option<DataHashRecord>, Error> {
         dbg!(hash);
-        if *hash == DataHashRecord::default().hash {
-            return Ok(Some(DataHashRecord::default()));
+        if *hash == Hash::empty() {
+            return Ok(Some(DataHashRecord::empty()));
         }
         let mut filter = doc! {};
         filter.insert("hash", hash_to_bson(hash));
@@ -591,7 +593,7 @@ impl KvPair for MongoKvPair {
         let mut collection = self.new_collection(&contract_id, false).await?;
         let index = request.index;
         let proof_v0 = ProofType::ProofV0 as i32;
-        let (record, proof) = match (request.hash.as_ref(), request.proof_type) {
+        let (mut record, proof) = match (request.hash.as_ref(), request.proof_type) {
             // Get merkle records in a faster way
             (Some(hash), _) if request.proof_type != proof_v0 => {
                 let hash: Hash = hash.as_slice().try_into()?;
@@ -616,11 +618,16 @@ impl KvPair for MongoKvPair {
                 } else {
                     None
                 };
+                dbg!(&record, &proof_bytes);
                 (record, proof_bytes)
             }
         };
-        dbg!(&record, &proof);
+        // We now use [0u8; 32] to represent empty node hash, since
+        if record.hash == Hash::get_default_hash_for_depth(MERKLE_TREE_HEIGHT).unwrap() {
+            record.hash = [0u8; 32].try_into().unwrap();
+        }
         let datahash_record = collection.get_datahash_record(&record.hash()).await?;
+        dbg!(&record, &proof, &datahash_record);
         let node = match datahash_record {
             Some(datahash_record) => (record, datahash_record).try_into()?,
             // If the datahash record corresponding to this hash does not exists,

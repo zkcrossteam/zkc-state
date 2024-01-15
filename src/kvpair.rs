@@ -181,8 +181,12 @@ impl Hash {
         result.into()
     }
 
+    pub const fn empty() -> Self {
+        Self([0u8; 32])
+    }
+
     /// depth start from 0 up to Self::height(). Example 20 height MongoMerkle, root depth=0, leaf depth=20
-    pub fn get_default_hash(depth: usize) -> Result<Hash, MerkleError> {
+    pub fn get_default_hash_for_depth(depth: usize) -> Result<Hash, MerkleError> {
         if depth <= MERKLE_TREE_HEIGHT {
             Ok(DEFAULT_HASH_VEC[MERKLE_TREE_HEIGHT - depth])
         } else {
@@ -515,11 +519,11 @@ impl MerkleRecord {
 
     pub fn get_default_record(index: u64) -> Result<Self, MerkleError> {
         let height = (index + 1).ilog2() as usize;
-        let default = Hash::get_default_hash(height)?;
+        let default = Hash::get_default_hash_for_depth(height)?;
         let child_hash = if height == MERKLE_TREE_HEIGHT {
             [0; 32].try_into().unwrap()
         } else {
-            Hash::get_default_hash(height + 1)?
+            Hash::get_default_hash_for_depth(height + 1)?
         };
         Ok(MerkleRecord {
             index,
@@ -539,20 +543,17 @@ pub struct DataHashRecord {
     pub data: Vec<u8>,
 }
 
-impl Default for DataHashRecord {
-    fn default() -> Self {
-        let data = LeafData::default();
-        let hash = Hash::hash_data(&(data.0));
-        Self {
-            hash,
-            data: data.into(),
-        }
-    }
-}
-
 impl DataHashRecord {
     pub fn new(hash: Hash, data: Vec<u8>) -> Self {
         Self { hash, data }
+    }
+
+    pub const fn empty() -> Self {
+        Self {
+            // Note that we use the hash of [0u8; 32] as default hash, while empty vector to represent empty data
+            hash: Hash::empty(),
+            data: vec![],
+        }
     }
 }
 
