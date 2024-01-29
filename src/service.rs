@@ -245,18 +245,15 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
         let mut filter = doc! {};
         filter.insert("index", u64_to_bson(record.index));
         filter.insert("hash", hash_to_bson(&record.hash));
-        let exists = self.find_one_merkle_record(filter, None).await?;
-        exists.map_or(
-            {
+        let result = self.find_one_merkle_record(filter, None).await?;
+        match result {
+            Some(result) => Ok(result),
+            None => {
                 let result = self.insert_one_merkle_record(record, None).await?;
-                dbg!(record, &result);
+                dbg!(&record, &result);
                 Ok(*record)
-            },
-            |record| {
-                //println!("find existing node, preventing duplicate");
-                Ok(record)
-            },
-        )
+            }
+        }
     }
 
     pub async fn insert_non_leaf_node(
@@ -398,19 +395,17 @@ impl MongoCollection<MerkleRecord, DataHashRecord> {
     ) -> Result<DataHashRecord, Error> {
         let mut filter = doc! {};
         filter.insert("hash", hash_to_bson(&record.hash));
-        let exists = self.find_one_datahash_record(filter, None).await?;
-        dbg!(&exists);
-        exists.map_or(
-            {
+        dbg!(&record.hash, &filter);
+        let result = self.find_one_datahash_record(filter, None).await?;
+        dbg!(&result);
+        match result {
+            Some(result) => Ok(result),
+            None => {
                 let result = self.insert_one_datahash_record(record, None).await?;
                 dbg!(&record, &result);
                 Ok(record.clone())
-            },
-            |record| {
-                //println!("find existing node, preventing duplicate");
-                Ok(record.clone())
-            },
-        )
+            }
+        }
     }
 
     pub async fn get_datahash_record(

@@ -190,7 +190,7 @@ returns
 
 ### Update leaf node data
 ```bash
-curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":4294967295,"leaf_data_hash":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
+curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"index":4294967295,"data":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","hash":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE=","proof_type":"ProofV0"}' "http://localhost:50000/v1/leaves"
 ```
 returns
 ```
