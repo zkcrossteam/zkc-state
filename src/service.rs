@@ -8,11 +8,11 @@ use super::kvpair::{hash_to_bson, u64_to_bson, ContractId, DataHashRecord, Hash,
 use mongodb::bson::{doc, to_bson, Document};
 use mongodb::error::{TRANSIENT_TRANSACTION_ERROR, UNKNOWN_TRANSACTION_COMMIT_RESULT};
 use mongodb::options::{
-    Acknowledgment, FindOneOptions, InsertOneOptions, ReadConcern, ReplaceOptions,
-    TransactionOptions, UpdateModifications, UpdateOptions, WriteConcern,
+    Acknowledgment, CreateIndexOptions, FindOneOptions, InsertOneOptions, ReadConcern,
+    ReplaceOptions, TransactionOptions, UpdateModifications, UpdateOptions, WriteConcern,
 };
 use mongodb::results::{InsertOneResult, UpdateResult};
-use mongodb::{Client, ClientSession, Collection};
+use mongodb::{Client, ClientSession, Collection, IndexModel};
 use tonic::{Request, Response, Status};
 
 use super::proto::kv_pair_server::KvPair;
@@ -72,6 +72,29 @@ impl<T, R> MongoCollection<T, R> {
         let merkle_collection = database.collection::<T>(merkle_collection_name.as_str());
         let datahash_collection_name = Self::get_data_collection_name(contract_id);
         let datahash_collection = database.collection::<R>(datahash_collection_name.as_str());
+        if std::env::var("MONGODB_CREATE_INDEXES").is_ok() {
+            merkle_collection
+                .create_indexes(
+                    vec![
+                        IndexModel::builder().keys(doc! { "hash": 1 }).build(),
+                        IndexModel::builder().keys(doc! { "data": 1 }).build(),
+                        IndexModel::builder().keys(doc! { "index": 1 }).build(),
+                        IndexModel::builder().keys(doc! { "left": 1 }).build(),
+                        IndexModel::builder().keys(doc! { "right": 1 }).build(),
+                    ],
+                    CreateIndexOptions::builder().build(),
+                )
+                .await?;
+            datahash_collection
+                .create_indexes(
+                    vec![
+                        IndexModel::builder().keys(doc! { "hash": 1 }).build(),
+                        IndexModel::builder().keys(doc! { "data": 1 }).build(),
+                    ],
+                    CreateIndexOptions::builder().build(),
+                )
+                .await?;
+        }
         dbg!(merkle_collection_name, datahash_collection_name);
         Ok(Self {
             merkle_collection,

@@ -334,8 +334,8 @@ We implemented part of the service `KvPair` in [./proto/kvpair.proto](./proto/kv
 with RESTFUL API as noted above or directly issue RPC with gRPC. An example usage is available at [./src/kvpair.rs](./src/kvpair.rs).
 
 ### kvpair
-This kvpair service implements the Merkle tree trait. Instead of storing Merkle tree data locally, we send the data to the gRPC server and the server
-stores the data. Set the environment variable `KVPAIR_GRPC_SERVER_URL`, and then create a `MongoMerkle` with `MongoMerkle::construct` to use this crate.
+This kvpair service implements the Merkle tree trait. Instead of storing Merkle tree data locally, we can send the data to this gRPC server and the server will store the data to a mongodb database. kvpair will save data to the database specified in environment variable `MONGODB_URI`. If environment variable `MONGODB_CREATE_INDEXES` has been set, we will also try to create indexes for mongodb (this is recommended for performance).
+Set the environment variable `KVPAIR_GRPC_SERVER_URL`, and then create a `MongoMerkle` with `MongoMerkle::construct` to use this crate.
 One thing to note is that we the gRPC server is currently not protected by authentication. We should not expose this service publicly.
 
 ## MongoDB
