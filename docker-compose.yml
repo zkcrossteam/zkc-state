@@ -24,6 +24,13 @@ services:
     environment:
       - MONGODB_URI=mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}@mongodb:27017
 
+  gateway:
+    build:
+      context: ./gateway
+      args:
+        # Set proxy for go (e.g. https://goproxy.cn)
+        - GOPROXY
+
   kvpair:
     build:
       context: .

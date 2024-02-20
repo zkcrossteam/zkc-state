@@ -22,6 +22,9 @@
             protobuf3_24
             (rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
             go
+            grpc-gateway
+            protoc-gen-go
+            protoc-gen-go-grpc
           ];
 
           shellHook = ''
