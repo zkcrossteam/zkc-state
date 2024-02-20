@@ -142,6 +142,7 @@ service KVPair {
   rpc SetRoot(SetRootRequest) returns (SetRootResponse) {
     option (google.api.http) = {
       post : "/v1/root"
+      body : "*"
     };
   }
 
@@ -153,6 +154,7 @@ service KVPair {
   rpc SetLeaf(SetLeafRequest) returns (SetLeafResponse) {
     option (google.api.http) = {
       post : "/v1/leaves"
+      body : "*"
     };
   }
 
@@ -164,16 +166,19 @@ service KVPair {
   rpc SetNonLeaf(SetNonLeafRequest) returns (SetNonLeafResponse) {
     option (google.api.http) = {
       post : "/v1/nonleaves"
+      body : "*"
     };
   }
   rpc PoseidonHash(PoseidonHashRequest) returns (PoseidonHashResponse) {
     option (google.api.http) = {
       post : "/v1/poseidon"
+      body : "*"
     };
   }
   rpc DataHashRecord(DataHashRecordRequest) returns (DataHashRecordResponse) {
     option (google.api.http) = {
       post : "/v1/datahashrecord"
+      body : "*"
     };
   }
 }

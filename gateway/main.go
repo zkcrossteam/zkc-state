@@ -43,12 +43,11 @@ func main() {
 		Mux: []gwruntime.ServeMuxOption{
 			gwruntime.WithMarshalerOption(gwruntime.MIMEWildcard, &gwruntime.JSONPb{
 				MarshalOptions: protojson.MarshalOptions{
-					Multiline:     true,
-					UseProtoNames: true,
+					Multiline:         true,
+					UseProtoNames:     true,
+					EmitDefaultValues: true,
 				},
-				UnmarshalOptions: protojson.UnmarshalOptions{
-					DiscardUnknown: true,
-				},
+				UnmarshalOptions: protojson.UnmarshalOptions{},
 			}),
 		},
 	}
