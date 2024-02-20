@@ -9,27 +9,20 @@ services:
       - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USERNAME:-root}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}
 
-  envoy:
-    build: ./server/envoy
-    ports:
-      - 9901:9901
-      - 50000:50000
-
-  auth:
-    build:
-      context: ./services/auth
-      args:
-        # Set proxy for go (e.g. https://goproxy.cn)
-        - GOPROXY
-    environment:
-      - MONGODB_URI=mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-OlQtOieOzHMSfaEaEZrkd}@mongodb:27017
-
   gateway:
+    ports:
+      - 50000:8080
+    command:
+      - "/gateway"
+      - "-endpoint"
+      - "kvpair:50051"
     build:
       context: ./gateway
       args:
         # Set proxy for go (e.g. https://goproxy.cn)
         - GOPROXY
+    environment:
+      - GRPC_GO_LOG_SEVERITY_LEVEL=${GRPC_GO_LOG_SEVERITY_LEVEL:-INFO}
 
   kvpair:
     build:

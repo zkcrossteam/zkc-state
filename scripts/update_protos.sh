@@ -3,11 +3,6 @@
 script_dir="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 top_dir="$(dirname "$script_dir")"
 
-cd "$top_dir" || exit 1
-
-# Update descriptor sets for envoy.
-"${PROTOC:-protoc}" -Iproto -I. --include_imports --include_source_info --descriptor_set_out=server/envoy/proto/kvpair.pb proto/kvpair.proto
-
 # Generate the gRPC code for gateway.
 # Note that we must copy the files instead of making symlinks because, otherwise,
 # we may not be able to build the container with only the files in "$dir"

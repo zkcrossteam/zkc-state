@@ -11,11 +11,7 @@ jobs:
         include:
           - context: "."
             name: "kvpair"
-          - context: "./server/envoy"
-            name: "envoy"
-          - context: "./services/auth"
-            name: "auth"
-          - context: "./services/gateway"
+          - context: "./gateway"
             name: "gateway"
 
     steps:
