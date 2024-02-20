@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	_ "google.golang.org/genproto/googleapis/rpc/errdetails"
 
@@ -38,6 +39,17 @@ func main() {
 		GRPCServer: Endpoint{
 			Network: *network,
 			Addr:    *endpoint,
+		},
+		Mux: []gwruntime.ServeMuxOption{
+			gwruntime.WithMarshalerOption(gwruntime.MIMEWildcard, &gwruntime.JSONPb{
+				MarshalOptions: protojson.MarshalOptions{
+					Multiline:     true,
+					UseProtoNames: true,
+				},
+				UnmarshalOptions: protojson.UnmarshalOptions{
+					DiscardUnknown: true,
+				},
+			}),
 		},
 	}
 	if err := Run(ctx, opts); err != nil {
