@@ -2,9 +2,8 @@ The `zkc_state_service` is a service designed for efficiently storing and retrie
 
 Users may use [gRPC](https://grpc.io/) or [REST](https://en.wikipedia.org/wiki/Representational_state_transfer) interfaces to store their data.
 
-The following components are implemented. The user-facing proxy envoy is used to transcode gRPC protobuf (which is prevailing in the microservice world)
-to json (which is more friendly to front-end developers) and authorize API accesses. The [`auth`](./services/auth) package is a go program called by envoy
-to check the validity of API accesses. We use [hyperium/tonic](https://github.com/hyperium/tonic)
+The following components are implemented. The user-facing proxy [in ./gateway folder](./gateway) is used to transcode gRPC protobuf (which is prevailing in the microservice world)
+to json (which is more friendly to front-end developers). We use [hyperium/tonic](https://github.com/hyperium/tonic)
 to implement a gRPC server which ideally saves uses data into [data availability committees](https://ethereum.org/en/developers/docs/data-availability/).
 But we have only immplemented a data storage which uses MongoDB under the hood.
 
@@ -75,39 +74,18 @@ For example, when we need to set the `proof_type` field with type `ProofType` an
 ```
 
 ### Poseidon hash
-Say that we want to calculate the hashing of `010203040506070809101112131415161718192021222324252627282930`
-(with base64 encoding `AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkw`)
-Since `010203040506070809101112131415161718192021222324252627282930` is only 30 bytes long, we have to pad 2 bytes
-in order to represent it as a field element (which can be represented as 32 bytes). We pad 2 `0x00` in the end
-(this is just a simple example of transforming arbitary bytes into a field element, users may use any other sensible transformation).
-This data now becomes `0102030405060708091011121314151617181920212223242526272829300000`, whose
-base64 encoding is `AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwAAA=`.
-
-We can calculate the hash of `010203040506070809101112131415161718192021222324252627282930` by passing the resulting
-bytes `0102030405060708091011121314151617181920212223242526272829300000` (with two additional zeros).
+This API can only hash finite field element (it must be a valid 32 bytes that represent an element of the finite field we used)
+Say that we want to calculate the hashing of `d8a21eb428a5e6c66c413c58bb66efaf0ceedfaaea8a0dc94bbff25f8460eb01`
+(with base64 encoding `2KIetCil5sZsQTxYu2bvrwzu36rqig3JS7/yX4Rg6wE=`).
 
 ```bash
-curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"data":"AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkw","data_to_hash":"AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwAAA="}' "http://localhost:50000/v1/poseidon"
+curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"data":"2KIetCil5sZsQTxYu2bvrwzu36rqig3JS7/yX4Rg6wE="}' "http://localhost:50000/v1/poseidon"
 ```
 returns
 
 ```
 {
- "hash": "AtfHkvODAjygJDVat7Ybsc8YO39STVRx2s03E60uHBg="
-}
-```
-
-### Save data
-If the additional parameter `persist` is set to be `true` in the above API, we will also save the mapping of hash `AtfHkvODAjygJDVat7Ybsc8YO39STVRx2s03E60uHBg=`
-to the bytes `010203040506070809101112131415161718192021222324252627282930` to the database.
-```bash
-curl -v --header "Content-Type: application/json" --header "Accept: application/json" --data '{"data":"AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkw","data_to_hash":"AQIDBAUGBwgJEBESExQVFhcYGSAhIiMkJSYnKCkwAAA=","persist":true}' "http://localhost:50000/v1/poseidon"
-```
-returns
-
-```
-{
- "hash": "AtfHkvODAjygJDVat7Ybsc8YO39STVRx2s03E60uHBg="
+ "hash": "KtzNemS8+TVqymjSA4JpGCnHInh0uVrLz3+07mMLzBY="
 }
 ```
 
@@ -155,9 +133,11 @@ message SetLeafRequest {
 ### Get nonleaf node children hashes
 Given the above Merkle tree root, we can obtain the hashes of its children with
 ```bash
-curl -v "http://localhost:50000/v1/nonleaves?index=0&hash=SVNXWlYM9cwac67SR5Unp7sDYcpklUFlOwvvXZZ+IQs="
+curl -v "http://localhost:50000/v1/nonleaves?index=0&hash=0RkGOcomP83mv9oqjtGJlwM7gdpZ%2BROP3l49WAg3aCc%3D"
 ```
-returns
+Note that here the hash `0RkGOcomP83mv9oqjtGJlwM7gdpZ+ROP3l49WAg3aCc=` must be http-encoded to
+`0RkGOcomP83mv9oqjtGJlwM7gdpZ%2BROP3l49WAg3aCc%3D`. This is because both `+` and `=` have specicial meaning in http query.
+This returns
 ```
 {
  "node": {
@@ -180,7 +160,7 @@ returns
 ```
 {
  "node": {
-  "index": 4294967295,
+  "index": "4294967295",
   "hash": "iktQjC9pJoboIgTSMKnMHk9sVjo387AHQoNAvHHkIRA=",
   "node_type": "NodeLeaf",
   "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
@@ -196,7 +176,7 @@ returns
 ```
 {
  "node": {
-  "index": 4294967295,
+  "index": "4294967295",
   "hash": "4Nknab5e81ocyVPqxREoN9xKtLir1yJFOVc9q28WsCY=",
   "node_type": "NodeLeaf",
   "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE="
@@ -307,27 +287,8 @@ $ base64 -d <<< ABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE= | xxd
 
 # Components
 
-## Envoy
-Envoy is a service proxy known for its extreme flexibility. Two notable features that we need for envoy are
-[gRPC-JSON transcoder](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/grpc_json_transcoder_filter) and
-[External Authorization](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/security/ext_authz_filter.html)
-
-### gRPC-JSON transcoder
-With gRPC-JSON transcoder, we implemented a single backend server that exposes the same functionality to both javascript client and other microservices.
-This is quite useful as it is easier for javascript clients to call APIs in the RESTful way and microservices tend to communicate
-with each other using gRPC. Envoy can transparently transcode json requests from javascript clients into gRPC requests.
-
-### External Authorization
-In order to gate keep API accesses from unauthorized parties, we use the external authorization of envoy to check whether some access is
-authenticated. Each access to the backend gRPC server is first forwarded to the auth program. Auth program checks whether the request context
-and determine whether to allow this request to hit at the gRPC server. If the request is legal, then `auth` may append additional HTTP headers
-to gRPC server (e.g. contract ID used to track which contract is calling this API).
-
-## Auth
-The only functionality currently implemented in `auth` is to append a fixed HTTP header `x-auth-contract-id: FX6glXnwnPljB/ayPW/WHDz/EjB21Ewn4um+3wITXoc=`
-to the downstream request.
-
-In the future, we may lookup token and client information from MongoDB, determine if the request is valid and pass the client information to gRPC server.
+## Gateway
+Gateway is a proxy that uses [grpc-ecosystem/grpc-gateway](https://github.com/grpc-ecosystem/grpc-gateway/) to transcode gRPC into JSON.
 
 ## Tonic gRPC server
 We implemented part of the service `KvPair` in [./proto/kvpair.proto](./proto/kvpair.proto). Users may use the services provided by this server
